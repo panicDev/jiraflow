@@ -1,0 +1,23 @@
+{
+  "name": "jiraflow",
+  "private": true,
+  "scripts": {
+    "test:unit": "node --test hooks/scripts/phase-gate.test.js",
+    "test:scenarios": "node hooks/scripts/phase-gate.scenarios.test.js",
+    "test:prompts": "node --test tests/prompt-policy.test.js",
+    "test": "npm run test:unit && npm run test:scenarios && npm run test:prompts",
+    "dashboard": "node scripts/dashboard/server.js",
+    "dashboard:no-open": "DASHBOARD_NO_OPEN=1 node scripts/dashboard/server.js",
+    "dashboard:build": "npm --prefix scripts/dashboard/web install && npm --prefix scripts/dashboard/web run build",
+    "test:dashboard": "node --test scripts/dashboard/__tests__/*.test.js",
+    "test:frontend": "npm --prefix scripts/dashboard/web install && npm --prefix scripts/dashboard/web test -- --run",
+    "test:ci": "npm test && npm run test:dashboard && npm run test:frontend"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "express": "^4.21.2"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.6.0"
+  }
+}

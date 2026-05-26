@@ -1,0 +1,361 @@
+'use strict';
+
+const { EventEmitter } = require('node:events');
+
+const DEFAULT_RING_BUFFER_SIZE = 200;
+
+/**
+ * Parse an ISO 8601 string that has an explicit UTC offset (Z or ±HH:MM / ±HHMM).
+ * Returns the numeric UTC timestamp in ms, or NaN if:
+ *   - input is null/undefined/empty
+ *   - string is timezone-naive (no Z / offset)
+ *   - Date.parse fails (Invalid Date)
+ *
+ * @param {string|null|undefined} s
+ * @returns {number}
+ */
+function parseIsoUtcMs(s) {
+  if (!s || typeof s !== 'string') return NaN;
+  // Require explicit UTC marker: Z, +HH:MM, -HH:MM, +HHMM, -HHMM
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/.test(s)) return NaN;
+  const ms = Date.parse(s);
+  return ms; // NaN if unparseable
+}
+
+/**
+ * Simple fixed-capacity ring buffer backed by an Array.
+ * Oldest item is evicted when capacity is exceeded.
+ */
+class RingBuffer {
+  constructor(size) {
+    this._size = size;
+    this._buf = [];
+  }
+
+  push(item) {
+    if (this._buf.length >= this._size) {
+      this._buf.shift(); // evict oldest
+    }
+    this._buf.push(item);
+  }
+
+  toArray() {
+    return this._buf.slice();
+  }
+
+  get length() {
+    return this._buf.length;
+  }
+}
+
+/**
+ * Create an in-memory worktree state store.
+ * This is the swap point: Phase 2 can replace this factory with SQLite.
+ *
+ * @param {{ ringBufferSize?: number }} [opts]
+ * @returns {Store}
+ */
+function createStore(opts = {}) {
+  const ringBufferSize = opts.ringBufferSize ?? DEFAULT_RING_BUFFER_SIZE;
+
+  /** @type {Map<string, { state: object, activity: RingBuffer }>} */
+  const _map = new Map();
+  /** @type {Map<string, { state: object, activity: RingBuffer }>} */
+  const _sessions = new Map();
+  const _emitter = new EventEmitter();
+
+  function _getOrCreate(wPath) {
+    if (!_map.has(wPath)) {
+      _map.set(wPath, {
+        state: {
+          path: wPath, branch: null, taskId: null,
+          cachedIssue: null, lastFetchedAt: null, lastActiveAt: null, noContext: false,
+          // Signal stored separately outside the ring buffer. PreToolUse/PostToolUse crashes
+          // Prevent prompt/response signals from disappearing even when the ring buffer is full.
+          lastPromptEvent: null,
+          lastStopEvent: null,
+          // AC-5: jira-collector records the status of credentials for each workspace.
+          // null = not yet evaluated, 'ok' = OK, 'missing' = CredentialsNotFoundError
+          credsStatus: null,
+        },
+        activity: new RingBuffer(ringBufferSize),
+      });
+    }
+    return _map.get(wPath);
+  }
+
+  /**
+   * Serialize a record for external consumption.
+   * activity is truncated to last 50 items in snapshots.
+   */
+  function _serialize(record, { truncateActivity = false } = {}) {
+    const { state, activity } = record;
+    const acts = truncateActivity ? activity.toArray().slice(-50) : activity.toArray();
+    return { ...state, activity: acts };
+  }
+
+  function _getOrCreateSession(sessionId) {
+    if (!_sessions.has(sessionId)) {
+      _sessions.set(sessionId, {
+        state: {
+          sessionId,
+          cwd: null,
+          source: null,
+          startedAt: null,
+          lastActiveAt: null,
+        },
+        activity: new RingBuffer(ringBufferSize),
+      });
+    }
+    return _sessions.get(sessionId);
+  }
+
+  return {
+    /**
+     * Insert or update a worktree entry. Emits 'worktree.added' or 'worktree.changed'.
+     *
+     * cachedIssue protection: based on fetchedAt comparison.
+     * - incoming cachedIssue is null → pass (explicit clear, U7c).
+     * - No fetchedAt on either side → Preserve existing or cold-start fill (U7/U7b).
+     * - Both exist and incoming is newer → Replace (relieve stale-lock).
+     * - Same/older/NaN → Preserve existing (U7 regression safety net).
+     *
+     * @param {Partial<WorktreeState> & { path: string }} update
+     */
+    upsertWorktree(update) {
+      const isNew = !_map.has(update.path);
+      const record = _getOrCreate(update.path);
+      const merged = { ...update };
+      if ('cachedIssue' in merged && merged.cachedIssue !== null && record.state.cachedIssue) {
+        //both truthy → compare fetchedAt
+        const incomingMs = parseIsoUtcMs(merged.cachedIssue.fetchedAt);
+        const existingMs = parseIsoUtcMs(record.state.cachedIssue.fetchedAt);
+        if (!(incomingMs > existingMs)) {
+          // Same or Older / NaN → Preserve existing
+          delete merged.cachedIssue;
+        }
+      }
+      Object.assign(record.state, merged);
+      const eventName = isNew ? 'worktree.added' : 'worktree.changed';
+      _emitter.emit(eventName, { path: update.path, state: _serialize(record) });
+    },
+
+    /**
+     * Remove a worktree. Emits 'worktree.removed'. No-op if not found.
+     * @param {string} wPath
+     */
+    removeWorktree(wPath) {
+      if (!_map.has(wPath)) return; // no-op
+      _map.delete(wPath);
+      _emitter.emit('worktree.removed', { path: wPath });
+    },
+
+    /**
+     * Update the cachedIssue for a worktree. Sets lastFetchedAt to now.
+     * @param {string} wPath
+     * @param {object} issue
+     */
+    updateCachedIssue(wPath, issue) {
+      const record = _getOrCreate(wPath);
+      record.state.cachedIssue = issue;
+      record.state.lastFetchedAt = new Date().toISOString();
+      _emitter.emit('worktree.changed', { path: wPath, state: _serialize(record) });
+    },
+
+    /**
+     * Push an activity event into the ring buffer for a worktree.
+     * Auto-creates the worktree entry if it doesn't exist (with warn).
+     * @param {string} wPath
+     * @param {{ ts: string, type: string, data: object }} ev
+     */
+    pushActivity(wPath, ev) {
+      const record = _getOrCreate(wPath);
+      record.activity.push(ev);
+      if (ev?.ts) record.state.lastActiveAt = ev.ts;
+      // Key signals are stored in a separate field in addition to the ring buffer (eviction prevention).
+      if (ev?.type === 'UserPromptSubmit') {
+        record.state.lastPromptEvent = ev;
+      } else if (ev?.type === 'Stop') {
+        record.state.lastStopEvent = ev;
+      }
+      _emitter.emit('worktree.changed', { path: wPath, state: _serialize(record) });
+    },
+
+    /**
+     * Return all current worktree states (activity truncated to 50).
+     * @returns {WorktreeState[]}
+     */
+    getSnapshot() {
+      return Array.from(_map.values()).map((r) => _serialize(r, { truncateActivity: true }));
+    },
+
+    /**
+     * Return entries that need a Jira refresh:
+     *   - never fetched yet (lastFetchedAt = null) → cold start fill
+     *   - or fetched longer than staleMs ago
+     * Skips entries without a taskId or marked noContext.
+     * @param {number} staleMs
+     * @returns {WorktreeState[]}
+     */
+    getStaleEntries(staleMs) {
+      const threshold = Date.now() - staleMs;
+      const results = [];
+      for (const record of _map.values()) {
+        const { state } = record;
+        if (!state.taskId) continue;
+        if (state.noContext) continue;
+        if (!state.lastFetchedAt) {
+          results.push(_serialize(record));
+          continue;
+        }
+        const fetchedMs = parseIsoUtcMs(state.lastFetchedAt);
+        if (isNaN(fetchedMs) || fetchedMs < threshold) {
+          results.push(_serialize(record));
+        }
+      }
+      return results;
+    },
+
+    /**
+     * Insert or update a session entry. Keyed by sessionId (not cwd).
+     * Partial updates: only provided fields are written; existing fields preserved.
+     * Emits 'session.added' on first insert, 'session.changed' on update.
+     *
+     * @param {{ sessionId: string, cwd?: string, source?: string, startedAt?: string, lastActiveAt?: string }} update
+     */
+    upsertSession(update) {
+      if (!update || typeof update.sessionId !== 'string' || !update.sessionId) return;
+      const isNew = !_sessions.has(update.sessionId);
+      const record = _getOrCreateSession(update.sessionId);
+      // sessionId is the key — do not overwrite. Only other provided fields are merged.
+      for (const k of ['cwd', 'source', 'startedAt', 'lastActiveAt']) {
+        if (k in update && update[k] !== undefined) record.state[k] = update[k];
+      }
+      const eventName = isNew ? 'session.added' : 'session.changed';
+      _emitter.emit(eventName, { sessionId: update.sessionId, state: _serialize(record) });
+    },
+
+    /**
+     * Remove a session entry. Emits 'session.removed'. No-op if not found.
+     * @param {string} sessionId
+     */
+    removeSession(sessionId) {
+      if (!_sessions.has(sessionId)) return;
+      _sessions.delete(sessionId);
+      _emitter.emit('session.removed', { sessionId });
+    },
+
+    /**
+     * Push an activity event into the session's ring buffer.
+     * Auto-creates the session entry if missing (no warn — caller decides).
+     * @param {string} sessionId
+     * @param {{ ts: string, type: string, data: object }} ev
+     */
+    pushSessionActivity(sessionId, ev) {
+      if (!sessionId) return;
+      const record = _getOrCreateSession(sessionId);
+      record.activity.push(ev);
+      _emitter.emit('session.changed', { sessionId, state: _serialize(record) });
+    },
+
+    /**
+     * Return all current session states (activity truncated to 50).
+     * @returns {object[]}
+     */
+    getSessionsSnapshot() {
+      return Array.from(_sessions.values()).map((r) => _serialize(r, { truncateActivity: true }));
+    },
+
+    /**
+     * Return agent activity summary keyed by taskId.
+     * toolCallCount = count of PostToolUse events in the ring buffer (approximation).
+     * completedSteps = cachedIssue.completedSteps if available.
+     *
+     * @returns {Array<{ taskId: string, path: string, toolCallCount: number, completedSteps: string[] }>}
+     */
+    getWorktreeActivityByTask() {
+      const result = [];
+      for (const record of _map.values()) {
+        const { state, activity } = record;
+        if (!state.taskId) continue;
+        const toolCallCount = activity.toArray().filter((ev) => ev && ev.type === 'PostToolUse').length;
+        const completedSteps = (state.cachedIssue && Array.isArray(state.cachedIssue.completedSteps))
+          ? state.cachedIssue.completedSteps
+          : [];
+        result.push({
+          taskId: state.taskId,
+          path: state.path,
+          toolCallCount,
+          completedSteps,
+        });
+      }
+      return result;
+    },
+
+    /**
+     * Subscribe to store events.
+     * @param {'worktree.changed'|'worktree.added'|'worktree.removed'|'session.added'|'session.changed'|'session.removed'} event
+     * @param {Function} listener
+     */
+    on(event, listener) {
+      _emitter.on(event, listener);
+    },
+
+    /**
+     * Unsubscribe from store events.
+     */
+    off(event, listener) {
+      _emitter.off(event, listener);
+    },
+  };
+}
+
+const DEFAULT_SESSION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_SESSION_SWEEP_INTERVAL_MS = 30 * 1000; // 30 seconds
+
+/**
+ * Start a periodic sweeper that removes session entries whose lastActiveAt is
+ * older than ttlMs. Protects against zombie cards when SessionEnd is missed
+ * (Ctrl+C, kill, crash).
+ *
+ * The timer is unref()'d so it does not keep the process alive.
+ *
+ * @param {ReturnType<typeof createStore>} store
+ * @param {{ ttlMs?: number, intervalMs?: number, logger?: object, now?: () => number }} [opts]
+ * @returns {{ stop: () => void, sweep: () => string[] }}
+ */
+function startSessionSweep(store, opts = {}) {
+  const ttlMs = opts.ttlMs ?? DEFAULT_SESSION_TTL_MS;
+  const intervalMs = opts.intervalMs ?? DEFAULT_SESSION_SWEEP_INTERVAL_MS;
+  const logger = opts.logger || null;
+  const now = opts.now || Date.now;
+
+  function sweep() {
+    const cutoff = now() - ttlMs;
+    const removed = [];
+    for (const s of store.getSessionsSnapshot()) {
+      const lastMs = parseIsoUtcMs(s.lastActiveAt);
+      // entries with no lastActiveAt or unparseable timestamp are also stale.
+      if (isNaN(lastMs) || lastMs < cutoff) {
+        store.removeSession(s.sessionId);
+        removed.push(s.sessionId);
+      }
+    }
+    if (removed.length && logger && typeof logger.info === 'function') {
+      logger.info('session-sweep.removed', { count: removed.length, sessionIds: removed });
+    }
+    return removed;
+  }
+
+  const handle = setInterval(sweep, intervalMs);
+  if (typeof handle.unref === 'function') handle.unref();
+
+  return {
+    stop() {
+      clearInterval(handle);
+    },
+    sweep,
+  };
+}
+
+module.exports = { createStore, startSessionSweep };
