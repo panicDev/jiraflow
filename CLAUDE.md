@@ -54,7 +54,7 @@ Credential search order: Environment variable → `.mcp.json` → `~/.claude.jso
 
 - **Always fetch issue details before status transition** (`jira_get_transitions` → pass transitionId to `jira_transition_issue`).
 
-- **Context file**: The active task context is `.jira-context.json` (gitignored). Branch pattern `feature/<TASK-ID>`, worktree location `../<project>_worktree/<TASK-ID>`.
+- **Context file**: The active task context is `.jira-context.json` (gitignored). Branch pattern `<prefix>/<TASK-ID>` where prefix is issuetype-based (`fix`, `feature`, `task`, `hotfix`). Branch name is persisted to the `branch` field of the task entry at `start`. Worktree location `../<project>_worktree/<TASK-ID>`.
 
 - **Progress tracking**: When each skill is completed, its steps are added to `completedSteps` in `.jira-context.json` (to prevent duplication). Valid steps: `discover`, `create`, `init`, `start`, `approach`, `impl`, `test`, `review`, `merge`, `pr`, `done`. `done` additionally changes `status` to `"Done"`. Progress `✓` in Completion Summary is created from `completedSteps`. (`plan`/`design` has been integrated and removed as `approach` in MAE-350; stale traces of existing tasks are processed by migration logic.)
 

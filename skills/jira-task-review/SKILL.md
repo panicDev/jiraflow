@@ -33,14 +33,15 @@ If you need to call `mcp__atlassian__jira_get_issue` in this skill, first check 
 
 Prepare the review context — the main session does this.
 
+Read `branch` from the task entry in `.jira-context.json` (e.g. `fix/PROJ-123`). If `branch` is null/missing, fall back to `feature/<TASK-ID>`. Use this as `$BRANCH`.
+
 ```bash
-git log --oneline <base-branch>..feature/<TASK-ID>
-git diff --name-only <base-branch>..feature/<TASK-ID>
+git log --oneline <base-branch>..$BRANCH
+git diff --name-only <base-branch>..$BRANCH
 ```
 
-Check for existence of design document:
-- Does `docs/design/<TASK-ID>.design.md` exist? (Gap Analysis availability)
-- Does `docs/plan/<TASK-ID>.plan.md` exist? (See Acceptance Criteria)
+Check for existence of approach document:
+- Does `docs/approach/<TASK-ID>.approach.md` exist? (Gap Analysis availability / Acceptance Criteria)
 
 ### Step 2: Perform Review (Mode A: delegate / Mode B: self)
 

@@ -37,6 +37,8 @@ When calling `mcp__atlassian__jira_get_issue` in this skill, use the following p
 Load task context by reading `.jira-context.json`:
 - `taskId`, `branch`, `baseBranch`, `repoRoot`
 
+Use `branch` from context as `$BRANCH` in all subsequent git commands. If `branch` is null/missing, fall back to `feature/<taskId>`.
+
 If TASK-ID is passed as an argument, the corresponding value is used first.
 
 If `repoRoot` is missing, fall back to:
@@ -54,8 +56,8 @@ git -C "<repoRoot>" rev-parse --verify master 2>/dev/null
 ### Step 2: Pre-flight Checks
 
 ```bash
-# 1. Check the existence of feature branch
-git branch --list "feature/<TASK-ID>"
+# 1. Check the existence of task branch ($BRANCH from context)
+git branch --list "$BRANCH"
 
 # 2. Check uncommitted changes
 git status --porcelain
@@ -90,22 +92,22 @@ Select a merge strategy:
 **--no-ff (default)**
 ```bash
 git checkout <baseBranch>
-git merge --no-ff feature/<TASK-ID> -m "Merge feature/<TASK-ID>: <issue summary>"
+git merge --no-ff $BRANCH -m "Merge $BRANCH: <issue summary>"
 ```
 
 **--squash**
 ```bash
 git checkout <baseBranch>
-git merge --squash feature/<TASK-ID>
+git merge --squash $BRANCH
 git commit -m "feat(<TASK-ID>): <issue summary>"
 ```
 
 **rebase**
 ```bash
-git checkout feature/<TASK-ID>
+git checkout $BRANCH
 git rebase <baseBranch>
 git checkout <baseBranch>
-git merge --ff-only feature/<TASK-ID>
+git merge --ff-only $BRANCH
 ```
 
 If a merge conflict occurs, notify the user and stop. Instructions for re-executing after resolving the conflict.
@@ -132,10 +134,10 @@ After viewing the transition list with `mcp__atlassian__jira_get_transitions`, t
 After the merge is complete, display the following note:
 
 ```
-ℹ️ Feature branch preserved for PR creation.
+ℹ️ Task branch preserved for PR creation.
    Delete after the PR is merged:
 
-   git branch -d feature/<TASK-ID>
+   git branch -d $BRANCH
 ```
 
 The actual command is not executed.
@@ -166,9 +168,9 @@ Completed summary output in the format below:
 ---
 ✅ **Local Merge Complete** — <TASK-ID>
 
-- Merge: feature/<TASK-ID> → <baseBranch> (<strategy>)
+- Merge: <branch> → <baseBranch> (<strategy>)
 - Jira Status: In Review
-- Feature branch `feature/<TASK-ID>` preserved for PR creation (delete after PR merge)
+- Task branch `<branch>` preserved for PR creation (delete after PR merge)
 - Completed Report Posted to Jira
 
 **Progress**: discover → create → init → start → approach → impl → test → review → **merge ✓** → done

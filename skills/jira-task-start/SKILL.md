@@ -142,12 +142,13 @@ Interpret the absolute path of `JIRA_CTX_UPDATE_PY` as `skills/_shared/script-lo
 SCRIPT_NAME="jira-context-update.py" OUT_VAR="JIRA_CTX_UPDATE_PY"
 # Read skills/_shared/script-lookup.md and execute its lookup block here
 python3 "$JIRA_CTX_UPDATE_PY" <TASK-ID> start "<fresh-jira-status>" \
-    ".jira-context.json"
+    ".jira-context.json" --branch "<prefix>/<TASK-ID>"
 ```
 
 - `<fresh-jira-status>`: Actual status name re-queried with `jira_get_issue` immediately after Step 2 transition. Do not use the transition attempt value as is.
+- `--branch "<prefix>/<TASK-ID>"`: The branch created in Step 3 (e.g. `fix/PROJ-123`, `feature/PROJ-456`). Persisted to the `branch` field so downstream skills can read it.
 
-The script batches adding `"start"` to `completedSteps`, updating `status`, recording `startAt`, and updating `cachedIssue.status`/`fetchedAt`.
+The script batches adding `"start"` to `completedSteps`, updating `status`, recording `startAt`, writing `branch`, and updating `cachedIssue.status`/`fetchedAt`.
 
 The body of `cachedIssue` must be patched in advance in `.jira-context.json` as a result of Step 1 fetch so that the script only updates status/fetchedAt neatly.
 

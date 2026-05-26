@@ -18,17 +18,15 @@ allowed-tools:
 **Language Rule**: All user-facing output, generated documents, Jira issue content, AskUserQuestion text/options, and summaries MUST be written in English. Keep code, commands, identifiers, branch names, issue keys, JSON keys, and file paths exactly as-is. If any legacy instruction/example below contains Korean, translate it to English at runtime; Korean text is not authoritative for output language.
 
 ## Prerequisites
-- **Run from base branch**: Must be on base branch (develop/main/master), not the feature branch
-- `/jira-task merge` must be completed first (the feature branch has been merged into the local base)
 - `gh` CLI installed and authenticated (checked with `gh auth status`)
-- Feature branch `feature/<TASK-ID>` must have a commit
+- Task branch must have at least one commit
 - Must be pushed to Remote
 
 ## Workflow
 
 ### Step 1: Gather Context
 
-1. Read active task information from `.jira-context.json`
+1. Read active task information from `.jira-context.json`. Extract `branch` field from the matching task entry (e.g. `fix/PROJ-123`, `feature/PROJ-456`). Use this as `$BRANCH` in all subsequent git/gh commands. If `branch` is null/missing, fall back to `feature/<TASK-ID>`.
 2. **Cache-first**: Check `cachedIssue` in `.jira-context.json` (see CLAUDE.md "Issue Cache"). If it is a hit, the call is skipped and the cached description/issuetype is used to generate the PR body. If it is a miss, update the cache after calling `mcp__atlassian__jira_get_issue` (`fields="summary,status,description,issuetype,labels"`, `comment_limit=0` — only the items needed to generate the PR body).
 3. **Jira Host URL Extraction**: Extracts the host portion from the `self` field of the `get-issue` response (e.g. `https://company.atlassian.net/rest/api/...`) and uses it to create a Jira issue link. Example: `https://company.atlassian.net/browse/<TASK-ID>`. If there is no fresh response due to a cache hit, extract it from the `JIRA_URL` environment variable or use `JIRA_URL` of `.mcp.json` as a fallback.
 4. Check Base branch:
@@ -42,8 +40,8 @@ allowed-tools:
 # check gh CLI
 gh auth status
 
-# Check commit
-git log --oneline <base-branch>..feature/<TASK-ID>
+# Check commit ($BRANCH = branch read from context)
+git log --oneline <base-branch>..$BRANCH
 
 # Check remote push status
 git status -sb
@@ -51,7 +49,7 @@ git status -sb
 
 If Push is not enabled:
 ```bash
-git push -u origin feature/<TASK-ID>
+git push -u origin $BRANCH
 ```
 
 ### Step 3: Generate PR Content
@@ -69,7 +67,7 @@ gh pr create \
   --title "<TASK-ID>: <summary>" \
   --body "<generated body>" \
   --base <base-branch> \
-  --head feature/<TASK-ID>
+  --head $BRANCH
 ```
 
 Capture PR URL.
@@ -104,7 +102,7 @@ After adding `"pr"` to `completedSteps` in `.jira-context.json`, output summary 
 
 - PR URL: <PR URL>
 - Title: <TASK-ID>: <summary>
-- Base: <base-branch> ← feature/<TASK-ID>
+- Base: <base-branch> ← <branch>
 - Files: <count> changed
 - Jira comment: skipped (disabled)
 

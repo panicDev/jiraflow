@@ -17,6 +17,7 @@ The script:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -82,11 +83,9 @@ def list_worktrees(repo_root):
 
 
 def extract_task_id(branch):
-    """Extract TASK-ID from refs/heads/feature/<TASK-ID>."""
-    prefix = "refs/heads/feature/"
-    if branch and branch.startswith(prefix):
-        return branch[len(prefix):]
-    return None
+    """Extract TASK-ID from refs/heads/<prefix>/<TASK-ID>."""
+    m = re.match(r'^refs/heads/[^/]+/([A-Z]+-\d+)$', branch or "")
+    return m.group(1) if m else None
 
 
 def load_context(repo_root):
@@ -142,7 +141,17 @@ def clean_task(repo_root, task_id, dry_run=False):
     """Clean up worktree and branch for a single task."""
     worktree_base = get_worktree_base(repo_root)
     worktree_path = os.path.join(worktree_base, task_id).replace("\\", "/")
-    branch_name = f"feature/{task_id}"
+    ctx = load_context(repo_root)
+    branch_name = None
+    if isinstance(ctx.get("tasks"), list):
+        for t in ctx["tasks"]:
+            if t.get("taskId") == task_id:
+                branch_name = t.get("branch")
+                break
+    elif ctx.get("taskId") == task_id:
+        branch_name = ctx.get("branch")
+    if not branch_name:
+        branch_name = f"feature/{task_id}"
 
     print(f"\n{'[DRY RUN] ' if dry_run else ''}Cleaning {task_id}:")
 

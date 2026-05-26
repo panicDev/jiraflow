@@ -2,7 +2,7 @@
 """Update jira-context.json files (worktree-local and/or aggregate) for a workflow step.
 
 Usage:
-    python3 scripts/jira-context-update.py <TASK-ID> <step> <status> <ctx-file> [<ctx-file>...]
+    python3 scripts/jira-context-update.py <TASK-ID> <step> <status> <ctx-file> [<ctx-file>...] [--branch <name>]
     python3 scripts/jira-context-update.py --migrate-approach <ctx-file> [<ctx-file>...]
 
 The --migrate-approach mode is a one-shot migration (MAE-357): for each task
@@ -23,6 +23,8 @@ Args:
                resulting status may differ ("Completed", "Under review", etc. depending on workflow).
                Pass "-" to keep the existing status fields untouched (used by
                record-only steps like approach/impl/review that don't transition Jira).
+    --branch   Optional branch name to persist into the task entry (e.g. "fix/PROJ-123").
+               Written to `branch` field; used by the start step.
     ctx-file   One or more .jira-context.json paths. Format auto-detected:
                - Aggregate: {"tasks": [...], ...}  → updates the matching tasks[i] entry.
                - Worktree:  {"taskId": ..., ...}   → updates top-level fields.
@@ -60,12 +62,14 @@ def _now_utc_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _apply_step(target: dict, step: str, status: str, ts: str) -> None:
+def _apply_step(target: dict, step: str, status: str, ts: str, branch: "str | None" = None) -> None:
     steps = target.get("completedSteps", [])
     if step not in steps:
         steps.append(step)
     target["completedSteps"] = steps
     target[f"{step}At"] = ts
+    if branch is not None:
+        target["branch"] = branch
     keep_status = status == "-"
     if not keep_status:
         target["status"] = status
@@ -76,7 +80,7 @@ def _apply_step(target: dict, step: str, status: str, ts: str) -> None:
         ci["fetchedAt"] = ts
 
 
-def update_context(ctx_file: str, task_id: str, step: str, status: str, ts: str) -> str:
+def update_context(ctx_file: str, task_id: str, step: str, status: str, ts: str, branch: "str | None" = None) -> str:
     if not os.path.isfile(ctx_file):
         return f"missing: {ctx_file}"
     with open(ctx_file, "r", encoding="utf-8") as f:
@@ -84,12 +88,12 @@ def update_context(ctx_file: str, task_id: str, step: str, status: str, ts: str)
     if isinstance(ctx.get("tasks"), list):
         for t in ctx["tasks"]:
             if t.get("taskId") == task_id:
-                _apply_step(t, step, status, ts)
+                _apply_step(t, step, status, ts, branch)
                 with open(ctx_file, "w", encoding="utf-8") as f:
                     json.dump(ctx, f, indent=2, ensure_ascii=False)
                 return f"aggregate updated ({task_id}): {ctx_file}"
         return f"no {task_id} in aggregate, skipped: {ctx_file}"
-    _apply_step(ctx, step, status, ts)
+    _apply_step(ctx, step, status, ts, branch)
     with open(ctx_file, "w", encoding="utf-8") as f:
         json.dump(ctx, f, indent=2, ensure_ascii=False)
     return f"worktree updated: {ctx_file}"
@@ -131,10 +135,21 @@ def main(argv: list[str]) -> int:
         for ctx_file in argv[2:]:
             print(migrate_approach(ctx_file))
         return 0
-    if len(argv) < 5:
+    # Parse optional --branch flag and collect ctx-files
+    branch: "str | None" = None
+    rest: list[str] = []
+    i = 1
+    while i < len(argv):
+        if argv[i] == "--branch" and i + 1 < len(argv):
+            branch = argv[i + 1]
+            i += 2
+        else:
+            rest.append(argv[i])
+            i += 1
+    if len(rest) < 4:
         print(__doc__, file=sys.stderr)
         return 2
-    task_id, step, status = argv[1], argv[2], argv[3]
+    task_id, step, status = rest[0], rest[1], rest[2]
     if step not in VALID_STEPS:
         print(
             f"error: invalid step '{step}'. Valid steps: {sorted(VALID_STEPS)}",
@@ -142,8 +157,8 @@ def main(argv: list[str]) -> int:
         )
         return 2
     ts = _now_utc_iso()
-    for ctx_file in argv[4:]:
-        print(update_context(ctx_file, task_id, step, status, ts))
+    for ctx_file in rest[3:]:
+        print(update_context(ctx_file, task_id, step, status, ts, branch))
     return 0
 
 

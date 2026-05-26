@@ -1,6 +1,6 @@
 {
   "name": "jiraflow",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Jira + Codex integration plugin for automating the full software development lifecycle. Supports task management, approach design, code review, and reporting through Jira.",
   "author": {
     "name": "ubed"

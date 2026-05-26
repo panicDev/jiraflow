@@ -1,6 +1,6 @@
 ---
 name: jira-task-init
-description: "Fetch assigned high-priority Jira tasks and create feature branches for each (count, issue key, or natural language). Triggers: jira-task init, init sprint, setup tasks, fetch assigned work."
+description: "Fetch assigned high-priority Jira tasks and register them in local context (count, issue key, or natural language). Branches are created lazily at start. Triggers: jira-task init, init sprint, setup tasks, fetch assigned work."
 user-invocable: false
 argument-hint: "[count | ISSUE-KEY | natural-language description]"
 allowed-tools:

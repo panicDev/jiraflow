@@ -20,7 +20,7 @@ allowed-tools:
 **Language Rule**: All user-facing output, generated documents, Jira issue content, AskUserQuestion text/options, and summaries MUST be written in English. Keep code, commands, identifiers, branch names, issue keys, JSON keys, and file paths exactly as-is. If any legacy instruction/example below contains Korean, translate it to English at runtime; Korean text is not authoritative for output language.
 
 ## Prerequisites
-- A feature branch `feature/<TASK-ID>` must exist with commits
+- A task branch must exist with commits (branch name read from `.jira-context.json` `branch` field)
 - Jira MCP server must be connected
 
 ## Workflow
@@ -30,7 +30,9 @@ allowed-tools:
 Check for `.jira-context.json` to get the active task context.
 If TASK-ID is provided as argument, use that instead.
 
-If `"merge"` or `"pr"` is present in `completedSteps`, context is sufficient for this step — no git call required. If neither exists (exception path: user calls done without merge/pr), then only check the branch existence with `git branch --list "feature/<TASK-ID>"`.
+Read `branch` from the task entry in `.jira-context.json` (e.g. `fix/PROJ-123`). If `branch` is null/missing, fall back to `feature/<TASK-ID>`. Use this as `$BRANCH` in git commands.
+
+If `"merge"` or `"pr"` is present in `completedSteps`, context is sufficient for this step — no git call required. If neither exists (exception path: user calls done without merge/pr), then only check the branch existence with `git branch --list "$BRANCH"`.
 
 ### Step 2: Fetch Current Issue Status
 
@@ -45,8 +47,8 @@ When merge/pr has already completed, use the local PDCA documents and context fi
 **Exception path (direct call to done without merge/pr)**: Only then, check stat once with the appropriate git command depending on the squash·merge type.
 
 - squash-merged onto base: `git show --stat $(git log --grep="<TASK-ID>" -1 --format=%H <base-branch>)`
-- Normal merge: `git diff --stat <base-branch>..feature/<TASK-ID>`
-- Judgment criteria: squash if `<base>..feature/<TASK-ID>` is empty, normal if not empty.
+- Normal merge: `git diff --stat <base-branch>..$BRANCH`
+- Judgment criteria: squash if `<base>..$BRANCH` is empty, normal if not empty.
 
 ### Step 4: Generate Completion Summary
 
