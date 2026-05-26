@@ -41,6 +41,7 @@ When the user types `/jira-task <action> [TASK-ID]`, read and follow the corresp
 | `auto` | `skills/jira-task-auto/SKILL.md` |
 | `clean` | `skills/jira-task-clean/SKILL.md` |
 | `report` | `skills/jira-task-report/SKILL.md` |
+| `status` | `skills/jira-task-status/SKILL.md` |
 
 `/jira` or `/jira dashboard` → `skills/jira-dashboard/SKILL.md`
 

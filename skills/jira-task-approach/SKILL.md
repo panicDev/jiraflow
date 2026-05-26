@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - mcp__atlassian__jira_get_issue
+  - mcp__atlassian__jira_batch_create_issues
 ---
 
 # jira-task-approach: Generate Approach Document (level-aware)
@@ -74,6 +75,40 @@ Read `skills/jira-task-approach/refs/level-templates.md` and fill the body using
 - **L3 Epic (sequencing only)**: child Story list + dependency/order/parallelability; detailed design is the child Story's responsibility
 
 Replace placeholders: `{task_id}`, `{summary}`, `{level}`, `{level_name}` (`Single`/`Story`/`Epic`).
+
+### Step 2.5: Offer Sub-task Creation (L2 only)
+
+Skip this step if level is L1 or L3.
+
+Parse `## Implementation Plan` table from the generated `docs/approach/<TASK-ID>.approach.md`. Extract each row's **File** and **Summary** columns as proposed sub-task candidates.
+
+Present to user via AskUserQuestion:
+
+```
+Found <N> implementation items. Create as Jira Sub-tasks under <TASK-ID>?
+
+| # | Proposed Sub-task |
+|---|------------------|
+| 1 | `src/auth/login.ts` — Add OTP validation |
+| 2 | `src/auth/routes.ts` — Add /otp-verify endpoint |
+```
+
+Options: "Create all", "Skip"
+
+If **Create all**: extract `project_key` from TASK-ID prefix (e.g. `PROJ-123` → `PROJ`). Call `mcp__atlassian__jira_batch_create_issues`:
+
+```json
+{
+  "issues": [
+    { "project_key": "<PROJECT>", "summary": "<File> — <Summary>", "issue_type": "Subtask", "parent": "<TASK-ID>" },
+    ...
+  ]
+}
+```
+
+On success: append created sub-task keys to the approach doc under Implementation Plan as a one-line note: `> Sub-tasks created: PROJ-201, PROJ-202, ...`
+
+On failure or skip: continue without blocking.
 
 ### Step 3: Attach to Jira
 

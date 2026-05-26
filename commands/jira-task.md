@@ -136,7 +136,7 @@ Deletes feature branches for completed tasks. Use `--list` to view current statu
 Use the `Skill` tool: `Skill({ skill: "jiraflow:jira-task-report", args: "" })`
 
 ### `status`
-Quick status check — reads active task information from `.jira-context.json` and fetches the latest status from Jira to display.
+Use the `Skill` tool: `Skill({ skill: "jiraflow:jira-task-status", args: "" })`
 
 ## Error Handling
 
