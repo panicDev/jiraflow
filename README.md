@@ -252,6 +252,12 @@ See `.opencode/INSTALL.md` for setup. Set the same env vars above, then load `sk
 
 `GEMINI.md` auto-loads `skills/using-jiraflow/SKILL.md` at session start. Set env vars as above. MCP server setup follows [mcp-atlassian docs](https://github.com/sooperset/mcp-atlassian).
 
+### CommandCode
+
+`.commandcode/skills/jiraflow/SKILL.md` is auto-discovered via `/skills` in CommandCode. Set the same env vars above, then invoke `jiraflow` from the skills menu.
+
+`AGENTS.md` is also read automatically by CommandCode as project instructions.
+
 ### Pi (earendil-works/pi) and others
 
 `AGENTS.md` provides universal agent instructions: skill routing table, tool name mapping, and TASK-ID auto-detection. Any agent that reads `AGENTS.md` at session start can run the full workflow.
