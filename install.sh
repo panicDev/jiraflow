@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# install.sh — one-shot setup for jira-cc plugin
-# Usage: bash install.sh
+# install.sh — one-shot setup for jiraflow
+# Usage (local):  bash install.sh
+# Usage (remote): curl -fsSL https://raw.githubusercontent.com/panicDev/jiraflow/main/install.sh | bash
 set -euo pipefail
 
-PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$PLUGIN_ROOT/.env"
+# ── tty detection (curl | bash needs /dev/tty for interactive reads) ──────────
+TTY_AVAILABLE=false
+if [ -t 0 ] || [ -e /dev/tty ]; then TTY_AVAILABLE=true; fi
+_read() {
+  if $TTY_AVAILABLE; then read -r "$@" </dev/tty
+  else read -r "$@"; fi
+}
+_read_s() {
+  if $TTY_AVAILABLE; then read -r -s "$@" </dev/tty; echo
+  else read -r "$@"; fi
+}
 
 # ── colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -25,7 +35,7 @@ prompt_with_default() {
     else
       echo -ne "${BOLD}${label}${RESET}: "
     fi
-    read -r -s value; echo
+    _read_s value
     [[ -z "$value" ]] && value="$default"
   else
     if [[ -n "$default" ]]; then
@@ -33,7 +43,7 @@ prompt_with_default() {
     else
       echo -ne "${BOLD}${label}${RESET}: "
     fi
-    read -r value
+    _read value
     [[ -z "$value" ]] && value="$default"
   fi
   printf -v "$var_name" '%s' "$value"
@@ -46,6 +56,34 @@ check_cmd() {
   fi
   ok "$1 found ($(command -v "$1"))"
 }
+
+# ── step 0: resolve plugin root (handle curl | bash) ─────────────────────────
+PIPED=false
+if [[ -f "${BASH_SOURCE[0]:-}" ]]; then
+  PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+  PIPED=true
+  DEFAULT_DIR="$HOME/.local/share/jiraflow"
+  hr
+  echo -e "${BOLD}  jiraflow — one-shot install (remote mode)${RESET}"
+  hr
+  echo
+  echo -e "${BOLD}Install directory${RESET} [${CYAN}${DEFAULT_DIR}${RESET}]: "
+  echo -ne "> "
+  _read INSTALL_DIR
+  INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+
+  if [[ -d "$INSTALL_DIR/.git" ]]; then
+    info "Existing clone found at $INSTALL_DIR — pulling latest..."
+    git -C "$INSTALL_DIR" pull --ff-only
+  else
+    info "Cloning panicDev/jiraflow → $INSTALL_DIR"
+    git clone https://github.com/panicDev/jiraflow.git "$INSTALL_DIR"
+  fi
+  PLUGIN_ROOT="$INSTALL_DIR"
+fi
+
+ENV_FILE="$PLUGIN_ROOT/.env"
 
 # ── banner ────────────────────────────────────────────────────────────────────
 hr
@@ -60,7 +98,7 @@ echo "  1) Claude Code  (uses \`claude mcp add\`)"
 echo "  2) Codex / OpenCode / Pi / other  (writes .env file)"
 echo "  3) Both (Claude Code + .env)"
 echo -ne "Choice [1]: "
-read -r AGENT_CHOICE
+_read AGENT_CHOICE
 AGENT_CHOICE="${AGENT_CHOICE:-1}"
 
 USE_CLAUDE_CODE=false
@@ -81,12 +119,11 @@ if $USE_CLAUDE_CODE; then
   check_cmd claude "Install Claude Code: https://docs.anthropic.com/en/docs/claude-code" || {
     err "claude CLI required for Claude Code mode"; exit 1
   }
-  # uv required for mcp-atlassian
   if ! command -v uv &>/dev/null; then
     warn "uv not found — required for uvx mcp-atlassian"
     echo    "  Install: curl -LsSf https://astral.sh/uv/install.sh | sh"
     echo -ne "  Continue anyway? [y/N]: "
-    read -r CONT; [[ "$CONT" =~ ^[Yy]$ ]] || exit 1
+    _read CONT; [[ "$CONT" =~ ^[Yy]$ ]] || exit 1
   else
     ok "uv found ($(uv --version))"
   fi
@@ -106,28 +143,28 @@ if [[ -f "$ENV_FILE" ]]; then
   set +u; source "$ENV_FILE" 2>/dev/null || true; set -u
 fi
 
-prompt_with_default JIRA_URL      "JIRA_URL      (e.g. https://company.atlassian.net)" "${JIRA_URL:-}"
-prompt_with_default JIRA_USERNAME "JIRA_USERNAME (Atlassian email)"                     "${JIRA_USERNAME:-}"
+prompt_with_default JIRA_URL       "JIRA_URL      (e.g. https://company.atlassian.net)" "${JIRA_URL:-}"
+prompt_with_default JIRA_USERNAME  "JIRA_USERNAME (Atlassian email)"                    "${JIRA_USERNAME:-}"
 prompt_with_default JIRA_API_TOKEN "JIRA_API_TOKEN"                                     "${JIRA_API_TOKEN:-}" "yes"
 echo
 prompt_with_default JIRA_PROJECTS_FILTER "JIRA_PROJECTS_FILTER (optional, e.g. PROJ,DEV)" "${JIRA_PROJECTS_FILTER:-}"
 prompt_with_default JIRA_DEFAULT_PROJECT "JIRA_DEFAULT_PROJECT (optional, e.g. PROJ)"      "${JIRA_DEFAULT_PROJECT:-}"
 echo
 
-# basic validation
 if [[ -z "$JIRA_URL" || -z "$JIRA_USERNAME" || -z "$JIRA_API_TOKEN" ]]; then
   err "JIRA_URL, JIRA_USERNAME, and JIRA_API_TOKEN are required."; exit 1
 fi
-JIRA_URL="${JIRA_URL%/}"  # strip trailing slash
+JIRA_URL="${JIRA_URL%/}"
 
 # ── step 4: connection test ───────────────────────────────────────────────────
 echo -e "${BOLD}Step 4: Testing connection to Jira${RESET}"
-HTTP_CODE=$(curl -s -o /tmp/jira-install-test.json -w "%{http_code}" \
+_TMP=$(mktemp)
+HTTP_CODE=$(curl -s -o "$_TMP" -w "%{http_code}" \
   -u "${JIRA_USERNAME}:${JIRA_API_TOKEN}" \
   "${JIRA_URL}/rest/api/3/myself" 2>/dev/null || echo "000")
 
 if [[ "$HTTP_CODE" == "200" ]]; then
-  DISPLAY_NAME=$(python3 -c "import json,sys; d=json.load(open('/tmp/jira-install-test.json')); print(d.get('displayName',''))" 2>/dev/null || echo "")
+  DISPLAY_NAME=$(python3 -c "import json; d=json.load(open('$_TMP')); print(d.get('displayName',''))" 2>/dev/null || echo "")
   ok "Connected as: ${DISPLAY_NAME:-$JIRA_USERNAME} (HTTP 200)"
 else
   case "$HTTP_CODE" in
@@ -137,8 +174,9 @@ else
     *)   err "Unexpected HTTP $HTTP_CODE" ;;
   esac
   echo -ne "  Continue setup anyway? [y/N]: "
-  read -r CONT; [[ "$CONT" =~ ^[Yy]$ ]] || exit 1
+  _read CONT; [[ "$CONT" =~ ^[Yy]$ ]] || exit 1
 fi
+rm -f "$_TMP"
 echo
 
 # ── step 5: configure ─────────────────────────────────────────────────────────
@@ -146,7 +184,7 @@ echo -e "${BOLD}Step 5: Configure${RESET}"
 
 if $USE_ENV_FILE; then
   cat > "$ENV_FILE" <<EOF
-# jira-cc environment — generated by install.sh
+# jiraflow environment — generated by install.sh
 # Source this file before starting your coding agent:
 #   source .env   OR add to your shell RC / direnv .envrc
 
@@ -158,7 +196,6 @@ EOF
   [[ -n "$JIRA_PROJECTS_FILTER" ]] && echo "export JIRA_PROJECTS_FILTER=\"$JIRA_PROJECTS_FILTER\"" >> "$ENV_FILE"
   [[ -n "$JIRA_DEFAULT_PROJECT" ]] && echo "export JIRA_DEFAULT_PROJECT=\"$JIRA_DEFAULT_PROJECT\""   >> "$ENV_FILE"
 
-  # ensure .env is gitignored in the plugin root
   if ! grep -qF ".env" "$PLUGIN_ROOT/.gitignore" 2>/dev/null; then
     echo ".env" >> "$PLUGIN_ROOT/.gitignore"
   fi
@@ -168,7 +205,6 @@ EOF
 fi
 
 if $USE_CLAUDE_CODE; then
-  # Register Atlassian MCP server
   MCP_CMD=(claude mcp add atlassian
     -e "JIRA_URL=$JIRA_URL"
     -e "JIRA_USERNAME=$JIRA_USERNAME"
@@ -182,60 +218,46 @@ if $USE_CLAUDE_CODE; then
     echo "  ${MCP_CMD[*]}"
   }
 
-  # Install plugin via marketplace (repo must be public) or local symlink fallback
-  if claude plugin marketplace add panicDev/jiraflow &>/dev/null && claude plugin install jiraflow@panicDev &>/dev/null; then
+  # Install plugin: marketplace first, local symlink fallback
+  if claude plugin marketplace add panicDev/jiraflow &>/dev/null \
+     && claude plugin install jiraflow@panicDev &>/dev/null; then
     ok "jiraflow plugin installed via marketplace"
   else
-    warn "Marketplace install failed — using local symlink fallback"
+    warn "Marketplace install failed — using local symlink"
     CACHE_DIR="$HOME/.claude/plugins/cache/jiraflow/jiraflow/0.1.3"
     mkdir -p "$(dirname "$CACHE_DIR")"
     ln -sfn "$PLUGIN_ROOT" "$CACHE_DIR"
-    # Add to known_marketplaces.json and installed_plugins.json via python
     python3 - <<PYEOF
-import json, os, datetime
+import json, os
+from datetime import datetime, timezone
 
 mp_path = os.path.expanduser("~/.claude/plugins/known_marketplaces.json")
 ip_path = os.path.expanduser("~/.claude/plugins/installed_plugins.json")
+s_path  = os.path.expanduser("~/.claude/settings.json")
 plugin_root = "$PLUGIN_ROOT"
-now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-# marketplaces
-if os.path.exists(mp_path):
-    with open(mp_path) as f: mp = json.load(f)
-else:
-    mp = {}
-mp["jiraflow"] = {
-    "source": {"source": "github", "repo": "panicDev/jiraflow"},
-    "installLocation": plugin_root,
-    "lastUpdated": now
-}
-with open(mp_path, "w") as f: json.dump(mp, f, indent=2)
+mp = json.load(open(mp_path)) if os.path.exists(mp_path) else {}
+mp["jiraflow"] = {"source": {"source": "github", "repo": "panicDev/jiraflow"},
+                  "installLocation": plugin_root, "lastUpdated": now}
+json.dump(mp, open(mp_path, "w"), indent=2)
 
-# installed plugins
-if os.path.exists(ip_path):
-    with open(ip_path) as f: ip = json.load(f)
-else:
-    ip = {"version": 2, "plugins": {}}
-for stale in ["jiraflow@local", "jiraflow@jiraflow"]:
-    ip["plugins"].pop(stale, None)
-ip["plugins"]["jiraflow@jiraflow"] = [{
-    "scope": "user",
+ip = json.load(open(ip_path)) if os.path.exists(ip_path) else {"version": 2, "plugins": {}}
+for k in ["jiraflow@local", "jiraflow@jiraflow", "jiraflow@panicDev"]:
+    ip["plugins"].pop(k, None)
+ip["plugins"]["jiraflow@jiraflow"] = [{"scope": "user",
     "installPath": os.path.expanduser("~/.claude/plugins/cache/jiraflow/jiraflow/0.1.3"),
-    "version": "0.1.3",
-    "installedAt": now,
-    "lastUpdated": now
-}]
-with open(ip_path, "w") as f: json.dump(ip, f, indent=2)
+    "version": "0.1.3", "installedAt": now, "lastUpdated": now}]
+json.dump(ip, open(ip_path, "w"), indent=2)
 
-# enabledPlugins in settings.json
-s_path = os.path.expanduser("~/.claude/settings.json")
 if os.path.exists(s_path):
-    with open(s_path) as f: s = json.load(f)
-    s.setdefault("enabledPlugins", {})
-    s["enabledPlugins"].pop("jiraflow@local", None)
-    s["enabledPlugins"]["jiraflow@jiraflow"] = True
-    with open(s_path, "w") as f: json.dump(s, f, indent=2)
-print("Local plugin registration done.")
+    s = json.load(open(s_path))
+    ep = s.setdefault("enabledPlugins", {})
+    for k in ["jiraflow@local", "jiraflow@panicDev"]:
+        ep.pop(k, None)
+    ep["jiraflow@jiraflow"] = True
+    json.dump(s, open(s_path, "w"), indent=2)
+print("Plugin registered (local).")
 PYEOF
     ok "jiraflow plugin installed (local)"
   fi

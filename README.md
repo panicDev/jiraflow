@@ -116,21 +116,20 @@ Progress: init ✓ → start ✓ → approach ✓ → impl → test → review �
 ### One-shot install
 
 ```bash
-git clone https://github.com/panicDev/jiraflow.git
-cd jiraflow
+curl -fsSL https://raw.githubusercontent.com/panicDev/jiraflow/main/install.sh | bash
+```
+
+Clones the repo (default: `~/.local/share/jiraflow`), prompts for agent type and Jira credentials, tests connectivity, then registers the MCP server (Claude Code) or writes a `.env` (other agents).
+
+Already have the repo cloned? Run locally instead:
+
+```bash
 bash install.sh
 ```
 
-Prompts for agent type (Claude Code / Codex / OpenCode / other), Jira credentials, and tests connectivity. Registers the MCP server for Claude Code or writes a `.env` for other agents.
-
-### Claude Code (local install)
+### Claude Code — verify after install
 
 ```bash
-# 1. Clone and symlink into Claude Code
-git clone https://github.com/panicDev/jiraflow.git
-cd jiraflow && bash install.sh   # select "Claude Code"
-
-# 2. Verify
 claude
 > /jira
 ```
@@ -176,24 +175,17 @@ claude mcp add atlassian \
 
 ### Step 1: Install the Plugin
 
-**Via install.sh** (recommended):
+**Recommended (one-shot)**:
 ```bash
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/panicDev/jiraflow/main/install.sh | bash
 ```
 
-**Manual Claude Code local install**:
+**Already cloned**:
 ```bash
-# Symlink into Claude Code's plugin cache
-mkdir -p ~/.claude/plugins/cache/local/jiraflow
-ln -sfn /path/to/jiraflow ~/.claude/plugins/cache/local/jiraflow/0.1.3
-# Then add jiraflow@local to ~/.claude/plugins/installed_plugins.json
+bash /path/to/jiraflow/install.sh
 ```
 
-> **Tip**: Use the interactive wizard after installing:
-> ```
-> > /jira setup
-> ```
-> Checks prerequisites, collects credentials, registers MCP, validates connection.
+> **Tip**: The interactive wizard (`/jira setup`) can also handle MCP registration and validation after install.
 
 ### Step 2: Create a Jira API Token
 
