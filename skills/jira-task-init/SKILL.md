@@ -19,7 +19,7 @@ allowed-tools:
 
 **Language Rule**: All user-facing output, generated documents, Jira issue content, AskUserQuestion text/options, and summaries MUST be written in English. Keep code, commands, identifiers, branch names, issue keys, JSON keys, and file paths exactly as-is. If any legacy instruction/example below contains Korean, translate it to English at runtime; Korean text is not authoritative for output language.
 
-Batch workflow that takes Jira tasks assigned to me in order of priority, creates a feature branch for each, and sets up task context.
+Batch workflow that fetches Jira tasks assigned to me in order of priority and registers them in local context. Branches are created lazily at `/jira-task start` — not here.
 
 ## Prerequisites
 - Jira MCP server connected
@@ -88,7 +88,7 @@ Found <N> tasks assigned to you:
 | 5 | PROJ-105 | Document update | Medium | To Do | Task |
 ```
 
-Ask user: "Do you want to create feature branches for these tasks? (select all or a number)"
+Ask user: "Register these tasks? (select all or enter numbers, e.g. 1,3)"
 
 ### Step 3: Detect Git Context
 
@@ -116,20 +116,6 @@ fi
 
 Skip if it already exists.
 
-### Step 5: Create Feature Branches
-
-For each selected task, check whether the branch exists and create if needed:
-
-```bash
-# Check if branch already exists
-git branch --list "feature/<TASK-ID>"
-
-# If not exists — create from base branch (stay on current branch after creation)
-git branch "feature/<TASK-ID>" <base-branch>
-# If already exists → "Already exists — skipped"
-```
-
-
 ### Step 6: Generate Task README
 
 Create `TASK-README.md` in the repo root (one per init run, summarizing all initialized tasks). Includes:
@@ -154,7 +140,7 @@ Create or update `.jira-context.json` in the repo root using aggregate format:
   "tasks": [
     {
       "taskId": "PROJ-101",
-      "branch": "feature/PROJ-101",
+      "branch": null,
       "repoRoot": "<REPO_ROOT absolute path>",
       "summary": "Implementing login functionality",
       "priority": "Highest",
@@ -185,15 +171,16 @@ Add `"init"` to `completedSteps` for each task in `.jira-context.json`.
 After displaying the results in a table, output a summary of the completion in the format below:
 
 ```
-| # | Task | Branch | Status |
-|---|------|--------|--------|
-| 1 | PROJ-101 | feature/PROJ-101 | Created |
-| 2 | PROJ-102 | feature/PROJ-102 | Created |
+| # | Task | Summary | Type | Status |
+|---|------|---------|------|--------|
+| 1 | PROJ-101 | Implementing login functionality | Story | To Do |
+| 2 | PROJ-102 | API error handling | Task | To Do |
 
 ---
 ✅ **Init Complete**
 
-- <N> feature branches created
+- <N> tasks registered
+- Branches will be created at `/jira-task start` (prefix derived from issuetype)
 - Jira comment: skipped (disabled)
 - Context saved to `.jira-context.json`
 

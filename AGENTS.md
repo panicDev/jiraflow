@@ -63,7 +63,7 @@ Skills use Claude Code tool names. Map to your agent's equivalent:
 ## TASK-ID Auto-Detection
 
 When TASK-ID is not provided, detect from (in order):
-1. `git branch --show-current` — extract from `feature/<TASK-ID>` pattern
+1. `git branch --show-current` — extract from `<prefix>/<TASK-ID>` pattern (prefix: fix, feature, task, hotfix, etc.)
 2. `.jira-context.json` — read `taskId` or active task in `tasks[]`
 
 ## Policies

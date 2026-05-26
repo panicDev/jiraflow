@@ -27,15 +27,16 @@ allowed-tools:
 
 ### Step 0: Detect Mode (post-init vs fresh)
 
-In cwd, read `.jira-context.json` with `Read` and branch downwards — **If init has already created the work tree·README·context, redundant work is skipped.**
+Read `.jira-context.json` with `Read`:
 
-- **post-init mode** (hot path): `.jira-context.json` exists with a task entry matching `<TASK-ID>` in `tasks[]`.
-  - **Skip** Step 3 (branch creation) and Step 4 (README creation).
-  - Step 6 is patching (preserving existing fields + adding them) instead of rewriting the whole thing.
-- **fresh mode**: The above conditions are not met.
-  - Perform all steps as is.
+- **post-init mode**: `.jira-context.json` exists with a task entry matching `<TASK-ID>` in `tasks[]`.
+  - Skip Step 4 (README creation) — already created by init.
+  - Step 6 is patching (preserving existing fields) instead of full rewrite.
+  - **Branch is always created here** (init no longer creates branches).
+- **fresh mode**: No existing context entry for this task.
+  - Perform all steps.
 
-This branch decision is informed to the user in one line — e.g. `📂 post-init mode: skip branch·README·context regeneration.`
+Inform user in one line: `📂 post-init mode: context found, creating branch now.` or `📂 fresh mode: full setup.`
 
 ### Step 1: Fetch Issue Details (cache-first)
 
@@ -71,13 +72,22 @@ Use `mcp__atlassian__jira_get_transitions` to fetch available transitions, then 
 If the transition fails, the issue may already be in progress or the transition name differs.
 In that case, inform the user of the current status and continue with the remaining steps.
 
-### Step 3: Create or Checkout Feature Branch (fresh mode only)
+### Step 3: Determine Branch Prefix + Create Branch
 
-**This step is skipped in post-init mode.** The branch was already created by init.
+Derive branch prefix from `cachedIssue.issuetype.name` (available after Step 1):
 
-**fresh mode**: Create a new feature branch from the base branch:
+| Issuetype | Prefix |
+|---|---|
+| `Bug` | `fix` |
+| `Story`, `New Feature` | `feature` |
+| `Task`, `Sub-task`, `Subtask` | `task` |
+| `Hotfix` | `hotfix` |
+| `Epic` | `feature` |
+| *(any other)* | `task` |
+
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
+BRANCH_NAME="<prefix>/<TASK-ID>"   # e.g. fix/PROJ-123, feature/PROJ-456, task/PROJ-789
 
 # Detect base branch (develop → main → master)
 BASE_BRANCH=""
@@ -86,13 +96,15 @@ for b in develop main master; do
 done
 
 # Create branch if not exists, then checkout
-git branch "feature/<TASK-ID>" "$BASE_BRANCH" 2>/dev/null || true
-git checkout "feature/<TASK-ID>"
+git branch "$BRANCH_NAME" "$BASE_BRANCH" 2>/dev/null || true
+git checkout "$BRANCH_NAME"
 ```
+
+Notify user: `🌿 Branch: <prefix>/<TASK-ID> (from <base-branch>)`
 
 ### Step 4: Generate Task Context README (fresh mode only)
 
-**This step is skipped in post-init mode.** Init does not overwrite the already created `TASK-README.md`. If reinforcement is necessary, modify it yourself.
+**This step is skipped in post-init mode.** Init already created `TASK-README.md`.
 
 **fresh mode**: Create `TASK-README.md` in the repo root:
 
@@ -103,7 +115,7 @@ git checkout "feature/<TASK-ID>"
 - **Status**: In Progress
 - **Priority**: <priority>
 - **Assignee**: <assignee>
-- **Branch**: feature/<TASK-ID>
+- **Branch**: <prefix>/<TASK-ID>
 - **Started**: <current date/time>
 
 ## Description
@@ -169,7 +181,7 @@ Completed summary output in the format below:
 ✅ **Start Complete** — <TASK-ID>
 
 - Issue Status: In Progress
-- Branch: feature/<TASK-ID> (checked out)
+- Branch: <prefix>/<TASK-ID> (checked out)
 - Jira comment: skipped (disabled)
 
 **Progress**: discover → create → init → **start ✓** → approach → impl → test → review → pr → done

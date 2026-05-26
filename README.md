@@ -83,8 +83,8 @@ L2 approach docs offer sub-task auto-creation: the implementation plan table is 
 **Interactive Setup Wizard**
 `/jira setup` walks through prerequisites (uv, Python 3.10+), credential collection, MCP server registration, and connection validation. No manual CLI commands needed.
 
-**Multi-Task Branch Setup**
-`/jira-task init` supports three modes: count (`init 5`), issue key (`init PROJ-123`), or natural language (`init "auth-related tasks"`). Creates `feature/<TASK-ID>` branches — no separate working directories.
+**Multi-Task Setup**
+`/jira-task init` supports three modes: count (`init 5`), issue key (`init PROJ-123`), or natural language (`init "auth-related tasks"`). Registers tasks in context — branches are created lazily at `start` with auto-prefix (`fix/`, `feature/`, `task/`, `hotfix/`) derived from the Jira issuetype.
 
 **Approach-Impl Gap Analysis**
 `/jira-task review` compares the approach document against actual code changes and flags discrepancies alongside code quality findings.
@@ -370,12 +370,12 @@ jiraflow/
 your-project/
   branches:
     develop (or main/master)   ← base branch
-    feature/PROJ-101           ← created by /jira-task init
-    feature/PROJ-102
-    feature/PROJ-103
+    fix/PROJ-101               ← Bug → created by /jira-task start
+    feature/PROJ-102           ← Story/Epic → created by /jira-task start
+    task/PROJ-103              ← Task/Sub-task → created by /jira-task start
 ```
 
-`/jira-task start <ID>` checks out the feature branch. `/jira-task merge` merges it back into base. No separate working directories.
+`/jira-task init` registers tasks in context — **no branches yet**. `/jira-task start <ID>` creates the branch (prefix derived from Jira issuetype) and checks it out. `/jira-task merge` merges back into base.
 
 ---
 
