@@ -642,6 +642,7 @@ Log file: `<workspaceRoot>/logs/dashboard-server.log`
 - [x] No-worktree branch model: `feature/<TASK-ID>` branches instead of git worktrees *(v0.1.2)*
 - [x] Multi-agent support: Codex, OpenCode, Gemini CLI, Pi — via `AGENTS.md`, `GEMINI.md`, `.codex-plugin/`, `.opencode/` *(v0.1.3)*
 - [x] Parallel sub-agent implementation: independent work packages on same branch via Agent tool *(v0.1.2)*
+- [x] Time tracking: auto-log work session duration to Jira worklog on `/jira-task done` *(v0.1.3)*
 - [ ] Bitbucket Cloud + GitLab MR support for `/jira-task pr`
 - [ ] Jira Server / Data Center (Personal Access Token)
 - [ ] Sub-task auto-creation from approach doc task breakdown

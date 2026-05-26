@@ -18,88 +18,49 @@ allowed-tools:
 
 ## Overview
 
-`jira-task-approach` integrates the existing two steps of `plan` + `design` into a single step. Adjust volume and depth depending on the scale of the task (L1/L2/L3) — do not use heavy design documents for small tasks.
+Integrates the former `plan` + `design` two-step into one. Depth scales with task size (L1/L2/L3) — small tasks get 5 lines, not heavy design docs.
 
-**Enter:**
-- `<TASK-ID>` (required)
-- `.jira-context.json.cachedIssue` (Cache-First Fetch)
-- `.jira-context.json.breakdownLevel` (preferred if present)
-- `Technical Approach Hint` section of discover output `docs/requirements/<slug>.requirements.md` (enter if present)
-
-**Output:**
-- `docs/approach/<TASK-ID>.approach.md`
-- Jira attachment (when available). Jira comments are disabled.
-
-**Non-target:**
-- Code writing/execution (impl step responsibility)
-- Test writing/execution (test phase responsibility)
+**Output**: `docs/approach/<TASK-ID>.approach.md` + Jira attachment when available. Jira comments disabled.
 
 ## Workflow
 
-### Step 0: Determine Breakdown Level
+### Step 1: Load Context
 
-Level Decision Priority:
+**1a. Determine breakdown level** (L1/L2/L3):
 
-1. **`.jira-context.json.breakdownLevel`** (`"L1"` | `"L2"` | `"L3"`) — Value recorded in Sub 1.3. If it is a hit, use it as is.
-2. **Jira issuetype fallback heuristic** — If there is no value in context, to issuetype of cachedIssue:
-   - `Subtask`, `Task`, `Bug` → **L1**
-   - `Story` → **L2**
-   - `Epic` → **L3**
-   - Others → **L1** (conservative)
-3. **Design level promotion check** — Even if the level set at 1 to 2 is L1, if the task touches any of the following, it is at least **promoted to L2** (already maintained as L2/L3): Data model/schema change · Transaction/Atomic boundary · Externally exposed interface/API contract · Concurrency/Idempotence/Ordering · Security/Privilege boundary. Since these dimensions are "irreversible decisions that must be nailed down before coding," a five-line summary is not enough.
-4. Notify the user of the determined level in one line — Example: `📐 Approach level: L2 (issuetype Story fallback)` / Specify reason for upgrade `📐 L2 (Task but schema change → upgrade)`.
+Priority order:
+1. `breakdownLevel` in `.jira-context.json` → use as-is if present
+2. Issuetype fallback: `Subtask`/`Task`/`Bug` → L1 · `Story` → L2 · `Epic` → L3 · others → L1
+3. Promotion check — upgrade to at least L2 if task touches any of: data model/schema change · transaction/atomic boundary · externally exposed API contract · concurrency/idempotence/ordering · security/privilege boundary
 
-When the user requests to change to natural language on the next turn ("Reduce to L1"), it is followed — no separate flag.
+Notify user in one line: `📐 Approach level: L2 (issuetype Story fallback)` or `📐 L2 (Task but schema change → upgrade)`. User can override on next turn ("reduce to L1") — no flag needed.
 
-### Step 1: Cache-First Fetch
+**1b. Cache-first issue fetch**:
+- Hit: `cachedIssue.key === TASK-ID` AND `summary`/`description`/`issuetype`/`fetchedAt` all present → skip fetch
+- Miss: `mcp__atlassian__jira_get_issue` with `fields="summary,status,description,issuetype,parent,subtasks,issuelinks,priority"`, `comment_limit=0` → update `cachedIssue`
 
-Check `cachedIssue` in `.jira-context.json` first (refer to CLAUDE.md "Cache-First Fetch").
+L3 requires child Story sequencing, so including `subtasks`/`issuelinks` is important.
 
-- **hit condition**: `key === <TASK-ID>` AND `summary`/`description`/`issuetype` all exist AND `fetchedAt` exists. → Skip fetch.
-- **miss**: Calling `mcp__atlassian__jira_get_issue`:
-  - `fields="summary,status,description,issuetype,parent,subtasks,issuelinks,priority"`
-  - `comment_limit=0`
-  - L3 requires child Story sequencing, so including `subtasks`/`issuelinks` is important.
-- Update `cachedIssue` after calling. `fetchedAt` returns `new Date().toISOString()` (UTC `Z`).
+**1c. Load requirements hints** (if any):
 
-### Step 2: Load Requirements Inputs
+Glob `docs/requirements/*.requirements.md`:
+- 0 files → proceed with no hint
+- 1 file → adopt automatically
+- N files → pick slug closest to `cachedIssue.summary`; if ambiguous, take first and notify
 
-Check `docs/requirements/*.requirements.md` as Glob.
+Extract from matched file: `## Technical Approach Hint` (primary input), `## Codebase Context`, `## Functional Requirements`, `## Open Questions` (carry over any P1/P2/[CONFLICT] items as Open Items in the approach doc).
 
-- 0 candidate files: Proceed with no input hint.
-- 1 candidate file: automatic adoption.
-- N candidate files: Select the slug closest to cachedIssue.summary. If ambiguous, accept the first file and notify the user.
+If no requirements file: mark `Source` as `N/A — discover omitted`.
 
-Extract the following sections from the adapted file:
-- `## Technical Approach Hint` (required input — quote as is if present)
-- `## Codebase Context` (reference)
-- `## Functional Requirements` (Reference)
-- `## Open Questions` (If there are any remaining P1/P2/[CONFLICT], they will be carried over to Open Items in the approach document)
+### Step 2: Generate Approach Document
 
-If there is no requirements file, mark the `Source` section in Step 3 as `N/A — discover omitted`.
+**L3 empty-child guard** (L3 only): count child Story candidates from `subtasks` + `issuelinks` (including `is blocked by` reverse). If 0 children:
+- Output: `⚠️ L3 Epic has 0 child stories. Register child issues via /jira-task create or Jira, then re-run.`
+- Skip document creation, attachment, and context update
+- Do NOT add `"approach"` to `completedSteps`
+- Exit normally (no error)
 
-### Step 3: Generate Approach Document
-
-The output template for each level uses only the corresponding level block after `Read skills/jira-task-approach/refs/level-templates.md`.
-
-#### 3.0 L3 Empty-Child Guard
-
-Applies only when level is **L3**. Count the number of child Story candidates by combining `subtasks` + `issuelinks` (including `is blocked by` reverse) of `cachedIssue` fetched/cache in Step 1. If there are 0 cases, only an empty sequencing table is created, so **it ends early here**.
-
-- Output guidance to user:
-
-  ```
-  ⚠️ There are 0 child stories in L3 Epic.
-  First, disassemble and register the child issue in `/jira-task create` or Jira and run it again.
-  ```
-
-- **Skip** all document creation/Jira comments/attachments.
-- **Do not add** `"approach"` to `completedSteps` in `.jira-context.json` (considered not executed).
-- Normal termination (no error). Subsequent Steps 3.1 to 5 are not performed.
-
-L1/L2 or one or more children of L3 pass through this guard and enter 3.1.
-
-#### 3.1 Copy directory + base template
+For L1/L2, or L3 with ≥1 child:
 
 ```bash
 mkdir -p docs/approach
@@ -107,30 +68,18 @@ perl -0777 -pe 's/<!--.*?-->//gs' templates/approach.template.md \
     > docs/approach/<TASK-ID>.approach.md
 ```
 
-#### 3.2 Filling out the text by level
+Read `skills/jira-task-approach/refs/level-templates.md` and fill the body using only the block for the determined level:
+- **L1 Single (5 lines)**: areas of change, key decisions, verification, risk, rollback — 1 line each
+- **L2 Story (one page)**: Approach Summary, Architecture sketch, Implementation Plan (by file), Key Decisions, Test Plan, Risks — 5–10 lines each
+- **L3 Epic (sequencing only)**: child Story list + dependency/order/parallelability; detailed design is the child Story's responsibility
 
-Fill the body area by copying only the output format of the level determined in `refs/level-templates.md`. No other level blocks are used.
+Replace placeholders: `{task_id}`, `{summary}`, `{level}`, `{level_name}` (`Single`/`Story`/`Epic`).
 
-- **L1 Single (5 lines)**: Areas of change, key decisions, verification, risk, rollback — 1 line each.
-- **L2 Story (one page)**: Approach Summary, Architecture sketch, Implementation Plan (by file), Key Decisions, Test Plan, Risks. Each section should be no longer than 5-10 lines.
-- **L3 Epic (sequencing only)**: child Story list + dependency/order/parallelability. Detailed design is handled by the child Story, so it is not covered in this document.
-  - Child Story identification: `subtasks` + `issuelinks` of cachedIssue (including `is blocked by` reverse).
+### Step 3: Attach to Jira
 
-#### 3.3 Common meta population
+Do not call `mcp__atlassian__jira_add_comment` — Jira comments are disabled.
 
-Bulk replacement of placeholders in document header:
-- `{task_id}` → actual TASK-ID
-- `{summary}` → cachedIssue.summary
-- `{level}` → `L1` | `L2` | `L3`
-- `{level_name}` → `Single` | `Story` | `Epic`
-
-### Step 4: Skip Jira Comment
-
-Jira ticket comments are disabled. Do not call `mcp__atlassian__jira_add_comment`. The approach summary stays in `docs/approach/<TASK-ID>.approach.md` and, when possible, the file is uploaded as an attachment in Step 4.5.
-
-### Step 4.5: Attach Approach Document to Jira
-
-Upload attachment with public script:
+Upload the document as a Jira attachment:
 
 ```bash
 SCRIPT_NAME="jira-attach.sh" OUT_VAR="JIRA_ATTACH_SH"
@@ -138,11 +87,9 @@ SCRIPT_NAME="jira-attach.sh" OUT_VAR="JIRA_ATTACH_SH"
 [ -n "$JIRA_ATTACH_SH" ] && bash "$JIRA_ATTACH_SH" <TASK-ID> docs/approach/<TASK-ID>.approach.md
 ```
 
-In case of failure, continue after providing local file path information.
+On failure: show local file path and continue.
 
-### Step 5: Completion Summary
-
-Update `.jira-context.json` with `skills/_shared/context-update.md` pattern (approach is no Jira transition → `STATUS="-"`):
+### Step 4: Update Context + Summary
 
 ```bash
 SCRIPT_NAME="jira-context-update.py" OUT_VAR="JIRA_CTX_UPDATE_PY"
@@ -151,7 +98,7 @@ python3 "$JIRA_CTX_UPDATE_PY" <TASK-ID> approach "-" \
     ".jira-context.json"
 ```
 
-Afterwards output:
+Output:
 
 ```
 ---
@@ -160,10 +107,10 @@ Afterwards output:
 - Level: <L1/L2/L3>
 - Artifact: `docs/approach/<TASK-ID>.approach.md`
 - Jira comment: skipped (disabled)
-- Jira attachment: uploaded, or local path shown if upload fails
+- Jira attachment: uploaded (or local path if upload failed)
 
 **Progress**: discover → create → init → start → **approach ✓** → impl → test → review → merge → pr → done
 
-**Next**: `/jira-task impl <TASK-ID>` — start implementation from the approach document
+**Next**: `/jira-task impl <TASK-ID>` — implement from the approach document
 ---
 ```

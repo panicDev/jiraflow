@@ -12,6 +12,7 @@ allowed-tools:
   - mcp__atlassian__jira_get_issue
   - mcp__atlassian__jira_transition_issue
   - mcp__atlassian__jira_get_transitions
+  - mcp__atlassian__jira_add_worklog
 ---
 
 # jira-task-done: Complete a Jira Task
@@ -60,6 +61,39 @@ Create a complete summary citing the following sources in order of priority (no 
 
 Jira ticket comments are disabled. Do not call `mcp__atlassian__jira_add_comment`. Keep the completion report in the local completion summary.
 
+### Step 5.5: Log Work to Jira
+
+Read `startAt` from the task entry in `.jira-context.json`. If present, calculate elapsed time and log it:
+
+```bash
+START_AT=$(python3 -c "
+import json, sys
+ctx = json.load(open('.jira-context.json'))
+tasks = ctx.get('tasks', [ctx])
+t = next((t for t in tasks if t.get('taskId') == '$TASK_ID'), {})
+print(t.get('startAt', ''))
+")
+
+if [ -n "$START_AT" ]; then
+  ELAPSED_SEC=$(python3 -c "
+from datetime import datetime, timezone
+start = datetime.fromisoformat('$START_AT'.replace('Z','+00:00'))
+now = datetime.now(timezone.utc)
+print(int((now - start).total_seconds()))
+")
+  # Format as Jira time string: "1h 30m"
+  TIME_SPENT=$(python3 -c "
+s = $ELAPSED_SEC
+h, m = divmod(s // 60, 60)
+print(f'{h}h {m}m' if h else f'{m}m')
+")
+fi
+```
+
+Call `mcp__atlassian__jira_add_worklog` with `issue_key=<TASK-ID>`, `time_spent="<TIME_SPENT>"`.
+
+If `startAt` is missing or the call fails (worklog disabled for project), skip silently — do not block the workflow. Record result for summary.
+
 ### Step 6: Transition Issue
 
 Use `mcp__atlassian__jira_get_transitions` to fetch available transitions, then use `mcp__atlassian__jira_transition_issue` to move the issue:
@@ -100,7 +134,7 @@ Completed summary output in the format below:
 ✅ **Task Done** — <TASK-ID>
 
 - Jira Status: Done (or In Review)
-- Completed Report Posted to Jira
+- Time logged: <TIME_SPENT> (or "skipped — startAt not found")
 - `.jira-context.json` updated
 
 **Progress**: discover → create → init → start → approach → impl → test → review → merge → pr → **done ✓**
