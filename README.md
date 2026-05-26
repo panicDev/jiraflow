@@ -1,6 +1,6 @@
 # jiraflow · Coding Agent Plugin
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue)](#)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-orange)](https://docs.anthropic.com/en/docs/claude-code)
 [![MCP](https://img.shields.io/badge/MCP-mcp--atlassian-purple)](https://github.com/sooperset/mcp-atlassian)
@@ -149,12 +149,12 @@ claude mcp add atlassian \
 ### Typical session
 
 ```bash
-# Fetch top tasks and create feature branches
+# Fetch top tasks and register in context (no branches yet)
 > /jira-task init 5
 
 # Auto mode — full pipeline in one command
-> git checkout feature/PROJ-123
-> /jira-task auto       # start → approach → impl → test → review
+> /jira-task start PROJ-123   # creates fix/PROJ-123, feature/PROJ-456, etc.
+> /jira-task auto             # start → approach → impl → test → review
 
 # Or step-by-step (TASK-ID auto-detected from branch name)
 > /jira-task start      # Transition to In Progress
@@ -164,7 +164,7 @@ claude mcp add atlassian \
 > /jira-task review     # Gap analysis + code review
 
 # Back on base branch — choose one path:
-> /jira-task pr         # Push feature branch + create GitHub PR  (PR path)
+> /jira-task pr         # Push task branch + create GitHub PR  (PR path)
 # OR
 > /jira-task merge      # Merge locally without PR  (direct merge path)
 
@@ -277,24 +277,24 @@ See `.opencode/INSTALL.md`. Set the same env vars above, then load `skills/using
 | `/jira setup` | anywhere | Interactive setup wizard |
 | `/jira-task discover [topic]` | anywhere | Topic → `docs/requirements/<slug>.requirements.md` |
 | `/jira-task create [hint]` | anywhere | Interactively create a new Jira issue with optional sub-tasks |
-| `/jira-task init [N\|KEY\|desc]` | main branch | Fetch tasks + create feature branches |
-| `/jira-task auto <ID>` | feature branch | Auto-run full pipeline with sub-agent isolation |
-| `/jira-task start [ID]` | feature branch | Checkout branch + transition In Progress |
-| `/jira-task approach [ID]` | feature branch | Generate approach doc (L1/L2/L3) |
-| `/jira-task impl [ID]` | feature branch | Implement from approach doc |
-| `/jira-task test [ID]` | feature branch | Run tests + post report to Jira |
-| `/jira-task review [ID]` | feature branch | Gap analysis + code review |
-| `/jira-task merge [ID]` | feature branch | Merge into base branch |
-| `/jira-task pr [ID]` | base branch | Push + create GitHub PR |
+| `/jira-task init [N\|KEY\|desc]` | main branch | Fetch tasks + register in context (no branches) |
+| `/jira-task auto <ID>` | task branch | Auto-run full pipeline with sub-agent isolation |
+| `/jira-task start [ID]` | any | Create task branch (prefix from issuetype) + transition In Progress |
+| `/jira-task approach [ID]` | task branch | Generate approach doc (L1/L2/L3) |
+| `/jira-task impl [ID]` | task branch | Implement from approach doc |
+| `/jira-task test [ID]` | task branch | Run tests + post report to Jira |
+| `/jira-task review [ID]` | task branch | Gap analysis + code review |
+| `/jira-task merge [ID]` | task branch | Merge into base branch (direct merge path) |
+| `/jira-task pr [ID]` | task branch | Push + create GitHub PR (PR path) |
 | `/jira-task done [ID]` | base branch | Transition Done + log work time |
 | `/jira-task status` | anywhere | Rich view of active tasks + progress |
-| `/jira-task clean <ID...>\|--all\|--list` | anywhere | Delete feature branches for completed tasks |
+| `/jira-task clean <ID...>\|--all\|--list` | anywhere | Delete task branches for completed tasks |
 | `/jira-task report` | anywhere | Assigned issues status report |
 
 ### TASK-ID Auto-detection
 
-`[ID]` omittable when on a feature branch. Resolved in order:
-1. Git branch name: `feature/PROJ-123` → `PROJ-123`
+`[ID]` omittable when on a task branch. Resolved in order:
+1. Git branch name: `fix/PROJ-123` or `feature/PROJ-123` → `PROJ-123`
 2. `.jira-context.json` active task ID
 
 ---
@@ -384,7 +384,7 @@ your-project/
 When multiple tasks touch the same files, check overlap before starting:
 
 ```bash
-git diff --name-only main feature/PROJ-101
+git diff --name-only main fix/PROJ-101
 git diff --name-only main feature/PROJ-102
 ```
 
@@ -533,6 +533,9 @@ git fetch origin          # sync refs
 - [x] Multi-agent support: Codex, OpenCode, Gemini CLI, CommandCode, Pi *(v0.1.3)*
 - [x] Time tracking: auto-log session duration to Jira worklog on `done` *(v0.1.3)*
 - [x] Rich status view: `/jira-task status` with progress pipeline + elapsed time *(v0.1.3)*
+- [x] Issuetype-based branch prefixes: `fix/`, `feature/`, `task/`, `hotfix/` *(v0.2.0)*
+- [x] Lazy branch creation: `init` registers context only, `start` creates branch *(v0.2.0)*
+- [x] `merge` and `pr` as alternative paths (not sequential) *(v0.2.0)*
 - [ ] Bitbucket Cloud + GitLab MR support for `/jira-task pr`
 - [ ] Jira Server / Data Center (Personal Access Token auth)
 - [ ] CI/CD result posting (GitHub Actions, Bitbucket Pipelines)
