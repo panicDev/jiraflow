@@ -1,6 +1,5 @@
 # jiraflow · Coding Agent Plugin
 
-**[English]** | [Korean](#korean)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue)](#)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -657,77 +656,3 @@ Log file: `<workspaceRoot>/logs/dashboard-server.log`
 
 MIT
 
----
-
-<a name="korean"></a>
-
-## Korean Summary
-
-This plugin is a **development workflow automation tool that connects Jira + Claude Code**.
-
-### Dashboard
-
-In Claude Code, setup and startup are automatically performed with a single line in `/jira dashboard`. It automatically handles installing npm dependencies and building the UI on the first run, and starts immediately with cache detection on the second run.
-
-| command | Action |
-|--------|------|
-| `/jira dashboard` | Check status → Automatic setup+start if stopped |
-| `/jira dashboard start/stop/status/setup` | Individual Action |
-
-The server binds to `http://127.0.0.1:8765` and your default browser opens automatically. Manual execution is also possible with `npm run dashboard` (CI/headless: `DASHBOARD_NO_OPEN=1`, port change: `PORT=9000`).
-
-Each worktree card shows:
-
-- **Top badge**: Jira workflow status (outlined + left dot), cumulative number of tool calls (`⚙ N`), last activity relative time, badge by state (`⏵ waiting for response` / `stale` / `⛔ blocked × N`)
-- **SDLC stepper**: Step progress based on `completedSteps` of `.jira-context.json`. Intermediate steps skipped after `done` are marked with a strikethrough
-- **Activity panel**: Last prompt, **Conclusion line of last response**, tool in progress, sub-agent / blocked status. Prompt/response signals are preserved on the server separately from the ring buffer, so they do not disappear even when tool calls flood
-- **Issue link**: `blocks` / `blocked by` chip display. Unresolved blockers are highlighted, completed ones are struck out
-- **Card border status**:
-  - **blue pulse = busy** — `Stop` not yet after `UserPromptSubmit` (no time threshold, "generating response now")
-  - **Amber pulse + Waiting for response badge** — busy + Recent `Notification` contains permission/input/waiting
-  - **Red left stripe + ⛔ blocked badge** — Unresolved `is blocked by` link exists
-  - **dim + stale badge** — Jira status is complete, but worktree is still alive (targeted for cleanup)
-- **Top KITT bar**: Scan left to right when connected to SSE. The LIVE chip fills the progress until the next jira-collector polling from down → up
-- **Sort/Filter**: Sort chip in header (recent activity / issue key / summary) + title search field (taskId/summary/branch/path match)
-- **Toggle card/graph view** *(v0.30.x)*: Switch between two modes in header. Graph mode renders the worktree as a force-directed graph (react-flow + d3-force), showing the `blocks` / `parent` / `epic` relationships as color-separated edges (flowing dotted lines + arrows). Parent/epic edges form a hierarchy (above parent, below child), and blocks edges connect sibling nodes. Click on node → pull card to the right side panel, drag node → lock in place (simulation does not drag). Status/assignee Filter·Isolated node (dashed border)·Circular edge (bold red dotted line) highlighting support
-- **Cleanup Button** *(v0.30.x)*: `🗑 Cleanup` floating button is exposed when hovering at the bottom right of the stale status (Jira completed + worktree alive) card. Click → confirm → Server executes `git worktree remove` + `git branch -d`. Backend safeguards (registered worktrees only, completion status only, dirty rejection, branch name only looked up in store)
-- **Card without Jira context** (e.g. main repo): Shows only directory name, path, and activity, hides stepper and Jira-specific fields
-
-Hook flow: `hooks/hooks.json` → `hooks/scripts/dashboard-ingest.sh`(UserPromptSubmit·PreToolUse·PostToolUse·SubagentStop·Notification) / `hooks/scripts/stop-ingest.sh`(Stop, extract last assistant text from transcript) → `POST /ingest` → SSE. The server log is `<workspaceRoot>/logs/dashboard-server.log` (JSON Lines, automatically redact sensitive fields).
-
-### Key Features
-
-- **`/jira-task discover [topic]`** — Convert a natural language topic to **requirements document (`docs/requirements/<slug>.requirements.md`)**. Naturally linked with `/jira-task create --from-requirements <file>` and used as input for Epic/Story/Sub-task batch registration *(v1.1.x)*
-- **`/jira-task create [hint]`** — Interactively create a new Jira issue based on the conversation context. If the scope is large, the skill directly suggests subtask decomposition, and the dependency is registered as a `Blocks` link, which is then naturally linked with the "startable analysis" of `init`. Supports existing Epic connections. Prevent repeat failure by embedding `jira_create_issue` field conventions (JSON string `additional_fields`, bare-key `parent`, CSV `components`, etc.) of `mcp-atlassian` in the skill *(v0.12.0)*
-- `/jira-task init` — **feature branch batch creation** in three modes: numeric (`init 5`), issue key (`init PROJ-123`), and natural language (`init "authentication-related"`) *(v0.7.0)*
-- **Auto mode** (`/jira-task auto PROJ-123`): Avoid context pollution by executing each step as an **independent sub-agent**. If review is not passed **Automatic correction → Retest → Rereview** Repeat up to 2 times *(v0.9.0)*
-- **Setup Wizard** (`/jira setup`): Check prerequisites → Enter credentials → Register MCP → Verify connection Interactive guidance *(v0.6.0)*
-- Approach design (approach) → Implementation → Test → Review → PR → Completion **All stages are commanded** (The plan/design two stages are integrated into `approach` in v0.33.0)
-- Upon completing each step, **Jira comments, attachments, and status transitions are automatically processed**
-- Automatic analysis of **Gap between approach document and actual implementation code**
-- **Reviewer Calibration Log** — Prevent reviewer self-praise drift by accumulating the results of each review in `docs/review-log/` and analyzing pass rate and repetitive intellectual patterns with `scripts/analyze-review-log.py` *(v0.22.x)*
-- **Automatically restore progress between sessions** with `.jira-context.json`
-
-### Installation
-
-```bash
-claude plugin marketplace add panicDev/jiraflow
-claude plugin install jiraflow
-```
-
-After installing the plugin, you can run `/jira setup` to interactively set up the MCP server. Or register directly:
-
-```bash
-claude mcp add atlassian \
-  -e JIRA_URL=https://your-domain.atlassian.net \
-  -e JIRA_USERNAME=your-email@company.com \
-  -e JIRA_API_TOKEN=your-api-token \
-  -- uvx mcp-atlassian
-```
-
-For detailed settings, refer to [Detailed Settings Section](#setup-·-Detailed-Settings).
-
-### Other
-
-- Detailed information such as command list, branch strategy, other agent setup, and troubleshooting is described in the English section.
-- Please leave issues and suggestions at [GitHub Issues](https://github.com/panicDev/jiraflow/issues).
