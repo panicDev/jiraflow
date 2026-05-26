@@ -49,7 +49,7 @@ check_cmd() {
 
 # ── banner ────────────────────────────────────────────────────────────────────
 hr
-echo -e "${BOLD}  jira-cc — one-shot install${RESET}"
+echo -e "${BOLD}  jiraflow — one-shot install${RESET}"
 echo    "  Plugin root: $PLUGIN_ROOT"
 hr
 echo
@@ -168,7 +168,7 @@ EOF
 fi
 
 if $USE_CLAUDE_CODE; then
-  # build claude mcp add command
+  # Register Atlassian MCP server
   MCP_CMD=(claude mcp add atlassian
     -e "JIRA_URL=$JIRA_URL"
     -e "JIRA_USERNAME=$JIRA_USERNAME"
@@ -182,8 +182,65 @@ if $USE_CLAUDE_CODE; then
     echo "  ${MCP_CMD[*]}"
   }
 
-  # JIRAFLOW_ROOT via CLAUDE.md env hint (informational only — claude reads project CLAUDE.md)
-  info "Set JIRAFLOW_ROOT=$PLUGIN_ROOT in your shell RC for full cross-agent support"
+  # Install plugin via marketplace (repo must be public) or local symlink fallback
+  if claude plugin marketplace add panicDev/jiraflow &>/dev/null && claude plugin install jiraflow@panicDev &>/dev/null; then
+    ok "jiraflow plugin installed via marketplace"
+  else
+    warn "Marketplace install failed — using local symlink fallback"
+    CACHE_DIR="$HOME/.claude/plugins/cache/jiraflow/jiraflow/0.1.3"
+    mkdir -p "$(dirname "$CACHE_DIR")"
+    ln -sfn "$PLUGIN_ROOT" "$CACHE_DIR"
+    # Add to known_marketplaces.json and installed_plugins.json via python
+    python3 - <<PYEOF
+import json, os, datetime
+
+mp_path = os.path.expanduser("~/.claude/plugins/known_marketplaces.json")
+ip_path = os.path.expanduser("~/.claude/plugins/installed_plugins.json")
+plugin_root = "$PLUGIN_ROOT"
+now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+# marketplaces
+if os.path.exists(mp_path):
+    with open(mp_path) as f: mp = json.load(f)
+else:
+    mp = {}
+mp["jiraflow"] = {
+    "source": {"source": "github", "repo": "panicDev/jiraflow"},
+    "installLocation": plugin_root,
+    "lastUpdated": now
+}
+with open(mp_path, "w") as f: json.dump(mp, f, indent=2)
+
+# installed plugins
+if os.path.exists(ip_path):
+    with open(ip_path) as f: ip = json.load(f)
+else:
+    ip = {"version": 2, "plugins": {}}
+for stale in ["jiraflow@local", "jiraflow@jiraflow"]:
+    ip["plugins"].pop(stale, None)
+ip["plugins"]["jiraflow@jiraflow"] = [{
+    "scope": "user",
+    "installPath": os.path.expanduser("~/.claude/plugins/cache/jiraflow/jiraflow/0.1.3"),
+    "version": "0.1.3",
+    "installedAt": now,
+    "lastUpdated": now
+}]
+with open(ip_path, "w") as f: json.dump(ip, f, indent=2)
+
+# enabledPlugins in settings.json
+s_path = os.path.expanduser("~/.claude/settings.json")
+if os.path.exists(s_path):
+    with open(s_path) as f: s = json.load(f)
+    s.setdefault("enabledPlugins", {})
+    s["enabledPlugins"].pop("jiraflow@local", None)
+    s["enabledPlugins"]["jiraflow@jiraflow"] = True
+    with open(s_path, "w") as f: json.dump(s, f, indent=2)
+print("Local plugin registration done.")
+PYEOF
+    ok "jiraflow plugin installed (local)"
+  fi
+
+  info "Set JIRAFLOW_ROOT=$PLUGIN_ROOT in your shell RC for cross-agent support"
 fi
 
 echo
