@@ -183,7 +183,7 @@ Branch based on test results and complete summary output:
 - Jira comment: skipped (disabled)
 - Jira attachments: report + <N> screenshots, or local path shown if upload fails
 
-**Progress**: discover → create → init → start → approach → impl → **test ✓** → review → merge → pr → done
+**Progress**: discover → create → init → start → approach → impl → **test ✓** → review → pr → done
 
 **Next**: `/jira-task review <TASK-ID>` — Run a code review
 ---
@@ -199,7 +199,7 @@ Branch based on test results and complete summary output:
   - <test name>: <error summary>
 - Test report: `docs/test/<TASK-ID>.test-report.md`
 
-**Progress**: init → start → approach → impl → **test ✗** → review → merge → pr → done
+**Progress**: init → start → approach → impl → **test ✗** → review → pr → done
 
 **Next**: Re-run `/jira-task test <TASK-ID>` after correcting failed items
 ---

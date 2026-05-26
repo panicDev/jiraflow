@@ -37,8 +37,9 @@ graph LR
     C --> E["/jira-task impl\nImplement"]
     E --> F["/jira-task test\nTests + report"]
     F --> G["/jira-task review\nGap analysis + review"]
-    G --> H["/jira-task merge\nLocal merge"]
-    H --> I["/jira-task pr\nGitHub PR"]
+    G --> I["/jira-task pr\nGitHub PR"]
+    G -.-> H["/jira-task merge\nDirect merge"]
+    H -.-> J
     I --> J["/jira-task done\nDone + worklog"]
 
     AUTO["⚡ /jira-task auto\nstart→review (auto)"]
@@ -94,7 +95,7 @@ Each `/jira-task review` appends a structured entry to `docs/review-log/`. `scri
 **Session Continuity**
 Progress tracked in `.jira-context.json`. Reopen Claude Code and see exactly where you left off:
 ```
-Progress: init ✓ → start ✓ → approach ✓ → impl → test → review → merge → pr → done
+Progress: init ✓ → start ✓ → approach ✓ → impl → test → review → pr → done
 ```
 
 ---
@@ -161,11 +162,12 @@ claude mcp add atlassian \
 > /jira-task impl       # Implement based on approach
 > /jira-task test       # Run tests + post report to Jira
 > /jira-task review     # Gap analysis + code review
-> /jira-task merge      # Merge locally (ff/squash/rebase)
 
-# Back on base branch
-> git checkout develop
-> /jira-task pr         # Push + create GitHub PR
+# Back on base branch — choose one path:
+> /jira-task pr         # Push feature branch + create GitHub PR  (PR path)
+# OR
+> /jira-task merge      # Merge locally without PR  (direct merge path)
+
 > /jira-task done       # Transition Done + log work time
 ```
 

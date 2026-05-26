@@ -144,7 +144,7 @@ Output:
 - Jira comment: skipped (disabled)
 - Jira attachment: uploaded (or local path if upload failed)
 
-**Progress**: discover → create → init → start → **approach ✓** → impl → test → review → merge → pr → done
+**Progress**: discover → create → init → start → **approach ✓** → impl → test → review → pr → done
 
 **Next**: `/jira-task impl <TASK-ID>` — implement from the approach document
 ---

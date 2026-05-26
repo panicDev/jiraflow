@@ -94,7 +94,7 @@ Then print the completed summary in the format below:
 - Modified files: <list>
 - Jira comment: skipped (disabled)
 
-**Progress**: discover → create → init → start → approach → **impl ✓** → test → review → merge → pr → done
+**Progress**: discover → create → init → start → approach → **impl ✓** → test → review → pr → done
 
 **Next**: `/jira-task test <TASK-ID>` — write and run tests
 ---

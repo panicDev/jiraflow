@@ -171,8 +171,8 @@ Completed summary output in the format below:
 - Feature branch `feature/<TASK-ID>` preserved for PR creation (delete after PR merge)
 - Completed Report Posted to Jira
 
-**Progress**: discover → create → init → start → approach → impl → test → review → **merge ✓** → pr → done
+**Progress**: discover → create → init → start → approach → impl → test → review → **merge ✓** → done
 
-**Next**: `/jira-task pr <TASK-ID>` — Create a PR in the main repo after the session ends
+**Next**: `/jira-task done <TASK-ID>` — Transition Done + log work time
 ---
 ```

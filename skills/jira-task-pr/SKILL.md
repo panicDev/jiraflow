@@ -108,7 +108,7 @@ After adding `"pr"` to `completedSteps` in `.jira-context.json`, output summary 
 - Files: <count> changed
 - Jira comment: skipped (disabled)
 
-**Progress**: discover → create → init → start → approach → impl → test → review → merge → **pr ✓** → done
+**Progress**: discover → create → init → start → approach → impl → test → review → **pr ✓** → done
 
 **Next**: after the PR is merged, run `/jira-task done <TASK-ID>` to complete the task
 ---

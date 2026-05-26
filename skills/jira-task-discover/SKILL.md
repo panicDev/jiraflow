@@ -179,7 +179,7 @@ Prints a completion summary in the following format (same pattern as other jira-
 - Codebase context: <N excerpt files> (or "Relevant areas not found")
 - Issue decomposition suggestion: <L1: "1 single task" / L2: "Story 1 + Subtask N" / L3: "Epic 1 + Story N + Subtask M">
 
-**Progress**: **discover ✓** → create → init → start → approach → impl → test → review → merge → pr → done
+**Progress**: **discover ✓** → create → init → start → approach → impl → test → review → pr → done
 
 **Next** (Output 1 line according to the decomposition level confirmed in Step 5):
 - L1 Single: `/jira-task create <one-line hint>` — Register one Jira task referring to the analysis document (import parser has not yet received Single)

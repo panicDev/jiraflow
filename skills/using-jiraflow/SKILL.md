@@ -24,7 +24,7 @@ Set `JIRAFLOW_ROOT` to the absolute path of this plugin directory so scripts can
 ## Workflow
 
 ```
-discover → create → init → start → approach → impl → test → review → merge → pr → done
+discover → create → init → start → approach → impl → test → review → pr → done
 ```
 
 ## Actions

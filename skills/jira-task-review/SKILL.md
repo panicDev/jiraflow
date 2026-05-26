@@ -138,7 +138,7 @@ python3 "$JIRA_CTX_UPDATE_PY" <TASK-ID> review "-" \
 - Jira comment: skipped (disabled)
 - Jira attachment: uploaded, or local path shown if upload fails
 
-**Progress**: discover → create → init → start → approach → impl → test → **review ✓** → merge → pr → done
+**Progress**: discover → create → init → start → approach → impl → test → **review ✓** → pr → done
 
 **Next**: `/jira-task merge <TASK-ID>` — After local merge, `/jira-task pr <TASK-ID>` in main repo
 ---
@@ -155,7 +155,7 @@ python3 "$JIRA_CTX_UPDATE_PY" <TASK-ID> review "-" \
   - <Critical/Warning findings>
 - Jira comment: skipped (disabled)
 
-**Progress**: init → start → approach → impl → test → **review ✗** → merge → pr → done
+**Progress**: init → start → approach → impl → test → **review ✗** → pr → done
 
 **Next**: fix the issues, then rerun `/jira-task review <TASK-ID>`
 ---

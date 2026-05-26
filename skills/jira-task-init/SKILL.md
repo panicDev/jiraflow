@@ -197,7 +197,7 @@ After displaying the results in a table, output a summary of the completion in t
 - Jira comment: skipped (disabled)
 - Context saved to `.jira-context.json`
 
-**Progress**: discover → create → **init ✓** → start → approach → impl → test → review → merge → pr → done
+**Progress**: discover → create → **init ✓** → start → approach → impl → test → review → pr → done
 
 **Next**: `/jira-task start <TASK-ID>` — check out the branch and start working
 ---

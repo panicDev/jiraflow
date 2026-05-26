@@ -172,7 +172,7 @@ Completed summary output in the format below:
 - Branch: feature/<TASK-ID> (checked out)
 - Jira comment: skipped (disabled)
 
-**Progress**: discover → create → init → **start ✓** → approach → impl → test → review → merge → pr → done
+**Progress**: discover → create → init → **start ✓** → approach → impl → test → review → pr → done
 
 **Next**: `/jira-task approach <TASK-ID>` — write the level-aware approach document (or follow the Step 7 recommendation)
 ---

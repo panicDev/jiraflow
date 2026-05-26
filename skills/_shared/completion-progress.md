@@ -1,7 +1,7 @@
 # Completion Progress
 
 Canonical pipeline step order:
-`discover → create → init → start → approach → impl → test → review → merge → pr → done`
+`discover → create → init → start → approach → impl → test → review → pr → done`
 
 ## Completion Block Template
 
@@ -14,7 +14,7 @@ Output after each step completes:
 <step-specific bullets>
 - Jira comment: skipped (disabled)
 
-**Progress**: discover → create → init → start → approach → impl → test → review → merge → pr → done
+**Progress**: discover → create → init → start → approach → impl → test → review → pr → done
 
 **Next**: `/jira-task <nextstep> <TASK-ID>` — <description>
 ---

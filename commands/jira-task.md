@@ -162,7 +162,7 @@ Rules:
 - **Done**: Briefly describe what was actually performed (e.g., "PROJ-123 planning document created")
 - **Used**: List the skills (`jira-task-approach`, etc.), agents (`jira-reviewer`, etc.), and Jira MCP tools (`get-issue`, `transition`, etc.) used. Do not include Jira comment tools because Jira ticket comments are disabled. Omit if nothing was used.
 - **Next**: Recommend the next workflow step based on `completedSteps` in `.jira-context.json`. For work outside the workflow, recommend the contextually appropriate next action.
-  - Workflow step order: `discover → create → init → start → approach → impl → test → review → merge → pr → done`
+  - Workflow step order: `discover → create → init → start → approach → impl → test → review → pr → done`
   - After `review` is complete, next must be `merge` (`/jira-task merge <TASK-ID>`)
   - After `merge` is complete, next is `pr` (`/jira-task pr <TASK-ID>`)
 - May be omitted for simple Q&A unrelated to the workflow

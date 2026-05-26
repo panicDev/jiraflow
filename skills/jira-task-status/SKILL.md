@@ -34,8 +34,9 @@ and stop.
 For each task in `tasks[]`, compute:
 
 - **Progress bar**: map `completedSteps` to the pipeline:
-  `discover → create → init → start → approach → impl → test → review → merge → pr → done`
+  `discover → create → init → start → approach → impl → test → review → pr → done`
   Mark each step: `✓` if in completedSteps, `●` if it's the next step, `·` if pending
+  Note: `merge` is an optional step (direct merge path). If `merge` is in completedSteps, show it between `review` and `done` and treat it as satisfying the `pr` slot (next = `done`).
 
 - **Time elapsed**: if `startAt` is present and `doneAt` is absent, compute `now - startAt` → format as `Xh Ym` or `X days`
 
@@ -50,8 +51,8 @@ For each task in `tasks[]`, compute:
   | approach | `/jira-task impl <ID>` |
   | impl | `/jira-task test <ID>` |
   | test | `/jira-task review <ID>` |
-  | review | `/jira-task merge <ID>` |
-  | merge | `/jira-task pr <ID>` |
+  | review | `/jira-task pr <ID>` (or `/jira-task merge <ID>` for direct merge without PR) |
+  | merge | `/jira-task done <ID>` |
   | pr | `/jira-task done <ID>` |
   | done | — complete |
 
@@ -65,14 +66,14 @@ For each task in `tasks[]`, compute:
 ★ PROJ-123  Add OTP two-factor authentication          ← ★ = current branch
   Branch:    feature/PROJ-123  (checked out)
   Jira:      In Progress
-  Progress:  init ✓ · start ✓ · approach ✓ · impl ● · test · review · merge · pr · done
+  Progress:  init ✓ · start ✓ · approach ✓ · impl ● · test · review · pr · done
   Elapsed:   2h 14m
   Next:      /jira-task impl PROJ-123
 
   PROJ-124  Fix login session timeout
   Branch:    feature/PROJ-124
   Jira:      To Do
-  Progress:  init ✓ · start ● · approach · impl · test · review · merge · pr · done
+  Progress:  init ✓ · start ● · approach · impl · test · review · pr · done
   Next:      /jira-task start PROJ-124
 
 ─────────────────────────────────────────
